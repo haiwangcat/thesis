@@ -1,0 +1,63 @@
+% relsize.sty       2.0       Mar 15, 1995
+
+% New LaTex2e version by Donald Arseneau <asnd@reg.triumf.ca> and
+% Matt Swift <swift@bu.edu>.
+% Original LaTex2.09 smaller.sty author: Bernie Cosell <cosell@WILMA.BBN.COM> 
+%
+% Setting the font size relative to the current size
+%
+% commands are:
+% \relsize{n}  where n gives the number of steps to change the size by;
+%              n = -3 changes from \large to \footnotesize.
+% \smaller == \relsize{-1}
+% \larger  == \relsize{1}
+% \textsmaller{text}, \textlarger{text} - versions that take an argument
+% \mathsmaller{A}, \mathlarger{B}       - math versions 
+%   (The math versions are quite different from the text versions.)
+
+% There are more instructions at the end of the file (after \endinput).
+
+\ProvidesPackage{relsize}[1995/03/15 ver 2.0]
+
+\DeclareRobustCommand\relsize[1]{%
+\ifmmode \@nomath\relsize\else
+ \@tempcnta % assign number representing current font size
+   \ifx\@currsize\normalsize 4\else   % funny order is to have most ...
+    \ifx\@currsize\small 3\else       % ...likely sizes checked first
+     \ifx\@currsize\footnotesize 2\else
+      \ifx\@currsize\large 5\else
+       \ifx\@currsize\Large 6\else
+        \ifx\@currsize\LARGE 7\else
+         \ifx\@currsize\scriptsize 1\else
+          \ifx\@currsize\tiny 0\else
+           \ifx\@currsize\huge 8\else
+            \ifx\@currsize\Huge 9\else
+            4\rs@unknown@warning % unknown state: \normalsize as starting point
+ \fi\fi\fi\fi\fi\fi\fi\fi\fi\fi
+%  Change the number by the given increment:
+ \advance\@tempcnta#1\relax
+%  watch out for size underflow:
+ \ifnum\@tempcnta<\z@ \rs@size@warning{small}{\string\tiny}\@tempcnta\z@ \fi
+ \ifcase\@tempcnta  % set new size based on altered number
+    \tiny \or \scriptsize \or \footnotesize \or \small \or \normalsize \or 
+    \large \or \Large \or \LARGE \or \huge \or \Huge \else 
+     \rs@size@warning{large}{\string\Huge}\Huge
+\fi\fi}
+
+\newcommand\rs@size@warning[2]{\PackageWarning{relsize}{%
+ Size requested is too #1.\MessageBreak Using #2 instead}}
+
+\newcommand\rs@unknown@warning{\PackageWarning{relsize}{Current font size 
+ is unknown! (Why?!?)\MessageBreak Assuming \string\normalsize}}
+
+\DeclareRobustCommand\larger[1][\@ne]{\relsize{+#1}}
+\DeclareRobustCommand\smaller[1][\@ne]{\relsize{-#1}}
+\DeclareRobustCommand\textlarger[2][\@ne]{{\relsize{+#1}#2}}
+\DeclareRobustCommand\textsmaller[2][\@ne]{{\relsize{-#1}#2}}
+\newcommand\mathsmaller[1]{{\mathchoice{\textstyle}%
+  {\scriptstyle}{\scriptscriptstyle}{\scriptscriptstyle}#1}}
+\DeclareRobustCommand\mathlarger[1]{\mathchoice
+  {\mbox{\larger$\displaystyle#1\m@th$}}%
+  {{\displaystyle#1}}{{\textstyle#1}}{{\scriptstyle#1}}}
+
+\endinput

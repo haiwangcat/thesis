@@ -1,5 +1,8 @@
 \documentclass[12pt]{gatech-thesis}
 \usepackage{amsmath,amssymb,verbatim,latexsym,float,epsfig,subfigure,enumerate}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{arrows,shapes,snakes,automata,backgrounds,petri}
 \usepackage[ruled,vlined, boxed]{algorithm2e}
 
 %%
@@ -11,7 +14,7 @@
                                %% \protect\\ instead of \\, as \\ is a
                                %% fragile command that \MakeUpperCase
                                %% will break!
-\author{Perry H. Disdainful}
+\author{Cong Hou}
 \department{School of Computer Science}
 
 %% Can have up to six readers, plus principaladvisor and
@@ -67,6 +70,11 @@
 %%    \dissertationfalse
 %%    \listmajorfalse
 %%    \multivolumefalse
+
+
+
+
+
 
 \begin{document}
 \bibliographystyle{gatech-thesis}
@@ -969,7 +977,7 @@ Figures \ref{fig:code_example}(b) and \ref{fig:code_example}(c) show the generat
 \newcommand{\pVSG}{\ensuremath{G_P}\xspace}
 \newcommand{\lVSG}{\ensuremath{G_L}\xspace}
 
-Unmodified, our prior method as described in Section~\ref{sec:backstroke} cannot handle loops for two key reasons.
+Unmodified, the method described above cannot handle loops for two key reasons.
 %first, it brings cyclic paths, but our prior analysis only rely on acyclic path as the condition of each equality
 %
 First, a loop results in cyclic paths in the CFG, whereas our prior analysis relies on paths being acyclic.
@@ -1126,7 +1134,7 @@ Synthesizing such a while loop consists of synthesizing its body and predicate.
 \subsubsection{Building the loop body.}
 
 The loop body in the reverse program is generated from the search result in \lVSG.
-For each variable we remove the edge between the $\mu$ and $\mu'$ nodes and hence remove the cycles, so that we can generate the loop body using our prior code generation algorithm~\cite{Hou2012}.
+For each variable we remove the edge between the $\mu$ and $\mu'$ nodes and hence remove the cycles, so that we can generate the loop body using our prior code generation algorithm.
 
 %there is no cycles any more. 
 %As a result, this subgraph of the RG used to build the loop body connects each \viter or \vmu (for forward or reverse loop) to the $\mu$/$\mu'$ node or value nodes not defined in the loop. The code is generated in the same method as in \cite{Hou2012}. 
@@ -1158,8 +1166,6 @@ For each variable we remove the edge between the $\mu$ and $\mu'$ nodes and henc
 To guarantee that the generated loop has the same iterations at runtime as the original loop, we need to build a proper loop predicate. 
 We propose three approaches to building a correct loop predicate. 
 To illustrate those approaches, we temporarily introduce the following loop example. We assume that the omitted statements  modify neither \texttt{A[]} nor \texttt{i}.
-
-
 \small
 \begin{verbatim}
                               i = 0;
@@ -1207,7 +1213,6 @@ u := v_{in}; \; while (u \ne v_{out}) \;  \{\; /* \; update \; u \; */ \; \}
 $$
 
 Similarly, if \viter$\ne$\vinit  in each iteration, and  \vinit and \vfinal can be retrieved before the loop, and \vmu can be retrieved in the loop, we can use them to build a while loop as: 
-
 $$
 u := v_{out}; \; while (u \ne v_{in}) \;  \{\; /* \; update \; u \; */ \; \}
 $$
@@ -1384,6 +1389,146 @@ After the transformation, all loops in the program become while loops and our me
 
 
 \chapter{Synthesis for programs with arrays}
+
+
+\newcommand{\Drawgraph}[2]{
+	\begin{figure}[H]
+	\centering
+	\begin{tikzpicture} [auto, >=stealth', scale=.8]
+
+	  \tikzstyle{array}=[rectangle, thick, minimum size=7mm, draw=black!75,font=\sffamily\small]
+	  \tikzstyle{scalar}=[circle, thick, minimum size=7mm, draw=black!75,font=\sffamily\small]
+	  \tikzstyle{op}=[circle, , draw=black!75, fill=gray!25, minimum size=2mm, font=\sffamily\tiny]
+	   \tikzstyle{available}=[blue]
+	    \tikzstyle{target}=[red]
+	  
+ 	 \tikzstyle{lbl}=[font=\sffamily\tiny]
+  
+	 #1
+	
+	\end{tikzpicture}
+	\caption{#2}
+	\end{figure}
+}
+
+
+
+
+\section{Array SSA}
+
+In the original SSA, when an element of an array is modified, the array itself is assigned with a new version, and the whole array is killed by that definition. Here we introduce an array SSA form originally proposed by [], in which array definitions usually kill only a subregion but not the whole array. This new SSA form representation can accurately represents the use-def relations between array regions. 
+
+There are four special $\phi$ functions defined for arrays: a $\delta$ function accounts for a partial kill after an element of the array is defined; a $\mu$ function defined at the begging of the loop header just as it for scalars; a $\eta$ function defined at the exit of a loop as the output of the loop; a $\gamma$ function defined at the join node in CFG joining definitions of arrays from different control flow paths.
+
+%there is one special $\phi$ function (called a $\delta$ function) added just after the definition, from which a partial kill is represented. For example:
+
+
+\subsection{$\delta$ function}
+ 
+ When an element of an array is modified, except renaming the array's name (assigning it with a new version), after this definition a special $\phi$ function, which is called a $\delta$ function, is defined. 
+ The syntax of a $\delta$ function is shown below:
+ $$[a_n, @a_n] = \delta(a_0, [a_1, @a_1^n], [a_2, @a_2^n],  ... , [a_m, @a_m^n] )$$
+ $$where \; @a_n=\bigcup_{k=1}^m@a_k^n \; and \; @a_i^n \cap a_j^n = \emptyset, \forall 1\le i,j \le m, i \ne j$$
+
+In the equation above, $@a_k^n$ represents the array region in which the definitions of all elements of $a_k$ are not killed before the definition of $a_n$.
+ For example below, after the definition in the second line, there is a $\delta$ function that defines a new version of the array $a$ as $a_2$.
+ %Each argument except the first one is a tuple $[a_n, @a_n]$ including a definition of the array and the corresponding array region. 
+ All elements in this region The $\delta$ function summarizes the reaching definitions of all elements: after one of them is redefined: 
+\begin{flalign*} 
+& int \; a_0[N]; \\
+& a_1[i] = ...;\\
+& [a_2, @a_2] = \delta (a_0, [a_1, @a_1^2]); \\
+& a_3[j] = ...;\\
+& [a_4, @a_4] = \delta (a_0, [a_2, @a_2^4], [a_3, @a_3^4]); 
+\end{flalign*} 
+In this example, $@a_1^2=@a_2=\{i\}, @a_2^4=\{i\}-\{j\}, @a_3^4=\{j\}, @a_4=\{i\}\cup\{j\}$.
+%In this example, after the definition in the second line, there is a $\delta$ function that defines a new version of the array $a$ as $a_2$. In $a_2$, only the value indexed by $i$ equals that in $a_1$, and any other value equals the corresponding one in $a_0$. This means only the $i$th value of $a_0$ is killed by the definition of $a_1$.
+
+
+\subsection{$\mu$ and $\eta$ functions}
+
+In the last chapter, when we handle loops with scalars, we defined a $\mu$ function for each variable modified in the loop. The arguments in the $\mu$ function are from outside and inside of the loop, and each definition of the $\mu$ function kills all previous definitions. In Array SSA,  for each array modified in the loop we also define a $\mu$ function in the loop header receiving definitions from outside and inside of the loop. However, like a $\delta$ function, a $\mu$ function only kills the definition in some regions of the array, and the region is related to the loop index. Let $i$ be the loop index, then all regions in a $\mu$ function are functions of $i$. The syntax of a $\mu$ function is defined by the following equation.
+ $$[a_n, @a_n] = \mu(a_0, (i=1,p), [a_1, @a_1^n], [a_2, @a_2^n],  ... , [a_m, @a_m^n] )$$
+
+Above sets $@a_k^n$ are function of the loop index $i$ and they represent the sets of memory locations defines in some iterations $j<i$ by definition $a_k$ and not killed before reaching the beginning of iteration $i$. 
+For any array element defined by $a_k$ in some iteration $j < i$, in order to reach iteration $i$, it must not be killed by other definitions to the same element. 
+There are two kinds of definitions that will kill it: definitions ($Kill_s$) that will kill it within the same iteration $j$ and definitions ($Kill_a$) that will kill it at iterations from $j +1$ to $i-1$.
+ $$@a_k^n(i)=\bigcup_{j=1}^{i-1}\left[@a_k(j)-\left(Kill_s(j) \cup \bigcup_{l=j+1}^{i-1}Kill_a(l)\right)\right]$$
+ $$ where \; Kill_s = \bigcup_{h=k+1}^m @a_h, \; and \; Kill_a=\bigcup_{h=1}^m@a_h$$
+
+\section{Arrays in the VSG}
+
+\subsection{Regions in array}
+
+Unless explicitly indicated, when we retrieve an array, we are retrieving all elements of it. 
+Given a C/C++ style array $a[N]$ with length $N$, we want to retrieve every $a[i]$, where $i\in[0,N)$. Here $[0,N)$ represents a set containing all integers in this interval. 
+%We will use this representation through this report. 
+We also call the set $[0,N)$ as the \emph{universal set} for the array $a[N]$, denoted by $U$. 
+Instead of using $@a$, we use $R$ to represent a region in an array. 
+
+Among all its subsets, there are some special ones: 
+
+\begin{enumerate}
+\item $\{i\}$ is a set with one element inside, representing a specific position in the array.
+
+\item The complementary set $\overline{\{i\}}$ represents all other elements except the $i$th one. 
+
+\item An interval (either open or closed) $[a, b)$ represents all integers inside. We can also use $[a:b]$ instead of $[a,b]$, and in the future for those induction variables with stride more that 1 (2 for example), we will use $[a:2:b]$ to express its value range.
+
+\end{enumerate}
+
+All set operations can be performed on array regions. For example, $\{i\} \cup \overline{\{i\}} = [0,N)=U$. We will depend on those operations to determine if all elements of an array are retrieved during the search on the VSG. 
+
+%For induction variables in a loop (assume it has depth one), we use two regions for arrays indexed by an induction variable: one for the local iteration, and one for a summary for the scope outside of the loop. 
+
+\subsection{Arrays in the VSG}
+
+We define a special node in the VSG to represent an array and we call it an array node. 
+Any element of this array is a scalar and is still denoted by a normal value node in VSG. 
+Remember that every edge in a VSG is attached with the path information.
+For any edge between two array nodes $a_x$ and $a_y$, besides  the path information, we also attach an array region $R$ on it. Then $a_x$ and $a_y$ have the same values for all elements in the region $R$.
+In addition, for each access of an array, e.g. $a_x[i]$, we also add a region $\{i\}$ on the edge between VSG nodes representing $a_x$ and $a_x[i]$.
+
+To build the VSG for arrays, we need to make some modifications based on the Array SSA. Let's see first how we build arrays nodes for a $\delta$ function. 
+Note that a $\delta$ function is always defined under a definition to an element of it, and those two definitions create two names of the same array. 
+To reduce the number of array nodes in VSG, we combine those two names into one, and connect this array node to other array nodes and the definition of its element. 
+For example, for the following code:
+\begin{flalign*} 
+& int \; a_0[N]; \\
+& a_1[i] = ...;\\
+& [a_2, @a_2] = \delta (a_0, [a_1, @a_1^2]); 
+\end{flalign*} 
+
+We don't create the new name $a_2$, but maintain a correct data-flow relations between $a_1$ and $a_0$, and also $a_1$ and $a_1[i]$. 
+As a consequence, all later use of $a_2$ will be replaced by $a_1$.
+The corresponding nodes and edges in the VSG are shown below:
+
+
+\Drawgraph{
+    \node [array, label=below:$a_0$] (a0) at (0,0) {};
+    \node [array, label=below:$a_1$] (a1) at (3,0) {};
+    \node [scalar, label=below:${a_1[i]}$] (a1i) at (6,0) {};
+    \path
+    (a1) edge node  [lbl, swap] {$\overline{\{i\}}$} (a0)
+    (a1) edge node  [lbl] {${\{i\}}$} (a1i);
+}{An edge labeled by a region between two array nodes.}
+
+
+For Array SSA, at join node there is also a $\phi$ function for an array if it has different definitions from incoming edges. In this case, we take it in the same way as scalars. In the VSG, we still build a $\phi$ array node representing the array defined by the $\phi$ function. All edges incident to this node has the region $[0,N)$. 
+
+The special searching rules for arrays:
+
+1. For each edge incident to an array node, except the path information, there is also a region information. 
+
+2.  If the search starts from an array node, it tried to retrieve all elements of that array. Then the region $[0,N)$ is attached to this search. This is very similar to the path information. 
+
+3. When the search reaches an element node from an array node, the region of the search can be removed. The search from node a to node b has the region information iff a or b is an array node.
+
+4. In the RG, for each array node, R(in)=R(out).
+
+
+
+
 
 \chapter{Conclusion}
 

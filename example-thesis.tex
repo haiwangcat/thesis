@@ -45,7 +45,7 @@
 %% \major{Algorithms, Combinatorics, and Optimization} 
 
 \copyrightyear{2013}
-\submitdate{April 2013} % Must be the month and year of graduation,
+\submitdate{October 2012} % Must be the month and year of graduation,
                          % not thesis approval! As of 2010, this means
                          % this text must be May, August, or December
                          % followed by the year.
@@ -58,14 +58,14 @@
 
 %% The following are the defaults
 %%    \titlepagetrue
-%%    \signaturepagetrue
+ \signaturepagefalse
 %%    \copyrightfalse
 %%    \figurespagetrue
 %%    \tablespagetrue
 %%    \contentspagetrue
 %%    \dedicationheadingfalse
 %%    \bibpagetrue
-%%    \thesisproposalfalse
+\thesisproposaltrue
 %%    \strictmarginstrue
 %%    \dissertationfalse
 %%    \listmajorfalse
@@ -88,30 +88,96 @@
 \contents
 % if you need a "List of Symbols or Abbreviations" look into
 % gatech-thesis-gloss.sty.
-\begin{summary}
-Why should I provide a summary?  Just read the thesis.
-\end{summary}
 \end{preliminary}
 %%
 \chapter{Introduction}
 
-Every dissertation should have an introduction.  You might not realize
-it, but the introduction should introduce the concepts, background,
-and goals of the dissertation.
 
-\section{Concepts}
+\newcommand{\naive}{na\"ive\xspace}
+\newcommand{\Program}{\ensuremath{P}\xspace}
+\newcommand{\Forward}{\ensuremath{\Program^{+}}\xspace}
+\newcommand{\Inverse}{\ensuremath{\Program^{-}}\xspace}
+\newcommand{\Input}{\ensuremath{I}\xspace}
+\newcommand{\Output}{\ensuremath{O}\xspace}
+\newcommand{\ExtraOuts}{\ensuremath{S}\xspace}
+\newcommand{\OutsS}{\ensuremath{\Outs+\ExtraOuts}\xspace}
+\newcommand{\Var}{\ensuremath{v}\xspace}
+\newcommand{\Vars}{\ensuremath{V}\xspace}
+\newcommand{\Exec}[4]{\ensuremath{{#1}\{{#2}={#3}\} \rightarrow \{{#2}={#4}\}}\xspace}
 
-This is where we talk about the concepts behind the dissertation.
 
-\subsection{Primary Concept}
+%\newcommand{\vmu}{\ensuremath{v_{in}^I}\xspace}
+%\newcommand{\vinit}{\ensuremath{v_{in}}\xspace}
+%\newcommand{\veta}{\ensuremath{v_{\eta}}\xspace}
+%\newcommand{\vfinal}{\ensuremath{v_{out}}\xspace}
+%\newcommand{\vmup}{\ensuremath{v_{\mu}'}\xspace}
+%\newcommand{\viter}{\ensuremath{v_{out}^I}\xspace}
+%\newcommand{\viterp}{\ensuremath{v_{iter}'}\xspace}
+%\newcommand{\mufunc}{\ensuremath{v_{in}^I=\mu(v_{in},v_{out}^I)}\xspace}
+%\newcommand{\etafunc}{\ensuremath{v_{out}=\eta(v_{in}^I)}\xspace}
+\newcommand{\varmbox}[2]{\ensuremath{{#1}_{\tiny\mbox{#2}}}}
+\newcommand{\vmu}{\ensuremath{\varmbox{v}{in}^I}\xspace}
+\newcommand{\vinit}{\ensuremath{\varmbox{v}{in}}\xspace}
+\newcommand{\veta}{\ensuremath{\varmbox{v}{\eta}}\xspace}
+\newcommand{\vfinal}{\ensuremath{\varmbox{v}{out}}\xspace}
+\newcommand{\vmup}{\ensuremath{\varmbox{v}{\mu}'}\xspace}
+\newcommand{\viter}{\ensuremath{\varmbox{v}{out}^I}\xspace}
+\newcommand{\viterp}{\ensuremath{\varmbox{v}{iter}'}\xspace}
+\newcommand{\mufunc}{\ensuremath{\varmbox{v}{in}^I=\mu(v_{in},v_{out}^I)}\xspace}
+\newcommand{\etafunc}{\ensuremath{\varmbox{v}{out}=\eta(v_{in}^I)}\xspace}
+\newcommand{\Loop}{\ensuremath{L}\xspace}
 
-This is the primary concept.
 
-\subsection{Secondary Concept}
+We consider the problem of synthesizing \emph{program inverses}.
+That is, given a program \Program with input state \Input and output state \Output, its \emph{inverse} or \emph{reverse program}, \Inverse, produces \Input given \Output.
+Our primary motivation comes from optimistic parallel discrete event simulation (OPDES).
+There, a simulator must process events while respecting logical temporal event-ordering constraints;
+to extract parallelism, an OPDES simulator may speculatively execute events and only \emph{rollback} execution when event-ordering violations occur~\cite{Jefferson1985}.
+In this context, the ability to perform rollback by running time- and space-efficient \Program and \Inverse, rather than saving and restoring large amounts of state, can make OPDES more practical.
+%
+Synthesizing inverses also appears in numerous other software engineering contexts, such as debugging~\cite{Biswas1999}, synthesizing ``undo'' code, or even generating decompressors automatically given only lossless compression code~\cite{Srivastava2011}.
+The challenge in any of these contexts is that constructing program inverses manually is a tedious, time-consuming, and error-prone task.
 
-This is the secondary concept.
+%Running the original \Program followed immediately by \Inverse is equivalent to a no-op.
+The program \Program will generally contain non-invertible statements, such as a destructive assignment.
+However, in these cases it may still be possible to create an inverse.
+In particular, we may create an instrumented version of \Program, called the \emph{forward program}, \Forward, with semantics-preserving changes so that it becomes possible to construct \Inverse from \Forward.
+We then replace executions of \Program with \Forward.
+For instance, suppose \Program overwrites a variable \Var.
+We may construct \Forward so that it saves the value of \Var prior to overwriting it.
+Then, \Inverse need only restore the saved value to recover \Var's prior value.
+In this case, \Forward produces extra outputs, which we denote by \ExtraOuts.
+Indeed, even if \Program is theoretically reversible without requiring extra output, we may nevertheless need to generate \ExtraOuts due to fundamental technical limits on program analysis.
 
-\subsubsection{Even more secondary}
+In this thesis proposal, we will introduce our system that generates \Forward and \Inverse for a given \Program. 
+Specifically, we categorize \Program into four types: \Program with only scalars and without loops; \Program with only scalars and with loops; \Program with arrays and without loops; \Program with arrays and with loops.
+We will first introduce how we handle the first three cases using a bunch of compilation techniques.
+Handing programs with arrays in loops is exactly the proposed work, being introduced in the last chapter.
+
+
+\section{Related work}
+\label{sec:related-work}
+Most of the work on inverting arbitrary (non-injective) imperative programs has focused an incremental approach: the imperative program is essentially executed in reverse, with each modifying operation in the original execution being undone individually.
+For example, if statements $s_{1} s_{2} \dots s_{n}$ are executed in the forward directions, the reverse function executes statements $s_{n}^{-1} \dots s_{2}^{-1} s_{1}^{-1}$.
+The incremental approach cannot handle unstructured control flows and is difficult to apply with early returns from functions; the approach presented in this thesis suffers from neither of these shortcomings.  
+Furthermore, the incremental inversion restores the initial state by restoring every intermediate program state between the final state and the initial state, even though these states are not needed
+
+Among the incremental inversion approaches, syntax-directed approaches apply only statement-level analysis. 
+If an assignment statement is lossless, its inverse is used: for example, the inverse of an integer increment is an integer decrement.
+Otherwise, the variable modified in the assignment has to be saved.
+An early example of syntax-directed incremental inversion is Brigg's Pascal inverter \cite{Briggs1987}. 
+This approach was later extended to C and applied both to optimistic discrete event simulation \cite{Carothers1999} and reversible debugging \cite{Biswas1999}.
+
+Akgul and Mooney introduced a more sophisticated incremental inversion algorithm that uses def-use analysis to invert some assignment statements that are not lossless \cite{Akgul2004a}; we refer to this approach as regenerative incremental inversion.
+In order to reverse a lossy assignment to the variable $a$, such as $a \leftarrow 0$, the regenerative algorithm looks for ways to recompute the previous value of $a$. 
+One technique to obtain the previous value of $a$ is to re-execute its definition; another technique is to examine all the uses of $a$ and see if its value can be retrieved from any of its uses. 
+These two techniques are applied recursively whenever a modifying operation is to be reversed; if they fail to produce a result, the overwritten variable is saved during forward execution.
+Our approach takes advantage of all the def-use relationships utilized by regenerative inversion, without suffering from the drawbacks of incremental inversion. 
+In addition to def-use information, our approach  also derives equality relationships between variables from the outcome of branching statements that test for equality or inequality.
+
+A related line of work is inverting programs that are injective, without using any state saving.
+Most such work focuses on inverting functional programs \cite{Abramov2002a,Gluck2005,Kawabe2005}.
+Approaches to inverting imperative programs include translation to a logic language \cite{Ross1997} and template-based generation of inverse candidates using symbolic execution \cite{Srivastava2011}.
 
 
 
@@ -119,12 +185,6 @@ This is the secondary concept.
 \chapter{Synthesis for programs with only scalars}
 
 
-\begin{figure}
-\centering
-\includegraphics[width=400pt]{figures1/CodeExample.pdf}
-\caption{(a) The original event $\quad$ (b) The forward event$\quad$ (c) The reverse event}
-\label{fig:code_example}
-\end{figure}
 
 
 \section{Handling loop-free programs}
@@ -144,7 +204,7 @@ extra memory usage and run-time overhead.
 We will first treat the inversion of loop-free code with only scalar data types, without aliasing.
 When such code is converted to static single assignment (SSA) form \cite{Cytron1991}, each versioned variable is only defined once and thus there is a one-to-one correspondence between each SSA variable and a single value that it holds.
 We will also take advantage of the fact that loop-free code has a finite number of paths.
-Loops will be discussed in the next section, and non-scalar data types and aliasing will not be handled in this paper.
+%Loops will be discussed in the next section, and non-scalar data types and aliasing will not be handled in this thesis.
 
 Given a cost measurement, for each path in the target function there should exist a best strategy to restore target values. 
 Strategies usually vary among different paths. 
@@ -166,6 +226,15 @@ For any path, a route graph shows a specific way to recover each target value fr
 Finally, the forward and reverse functions are built from a route graph. 
 Figure \ref{fig:framework} illustrates this process.
 
+In this section, we will use the example shown in Figure~\ref{fig:code_example} to illustrate our method.
+
+
+\begin{figure}
+\centering
+\includegraphics[width=400pt]{figures1/CodeExample.pdf}
+\caption{(a) The original function $\quad$ (b) The forward function$\quad$ (c) The reverse function}
+\label{fig:code_example}
+\end{figure}
 
 \subsection{The value search graph (VSG)}
 We first build an SSA graph for the target function.
@@ -278,7 +347,7 @@ The following properties guarantee that the route graph properly restores all ta
 \item If $e$ is a route graph edge and its corresponding edge in the value search graph is $e'$, then $P(e) \subseteq P(e')$
 	\label{rg-property-4}
 
-\item For each directed cycle with edges $e_1 \dots e_n$,  $\quad \bigcup_{i=1}^n{P(e_{i})} = \emptyset$
+\item For each directed cycle with edges $e_1 \dots e_n$,  $\quad \bigcap_{i=1}^n{P(e_{i})} = \emptyset$
 	\label{rg-property-5}
 
 \end{enumerate}
@@ -498,7 +567,7 @@ For example, putting only state saving edges to the route graph will produce the
 Including state saving edges and phi edges (edges incident to a phi node) results in the incremental state saving, where a variable is saved only for the paths for which it is modified. 
 \end{comment}
 
-\subsection{Instrumentation \& Code generation}
+\subsection{Instrumentation and Code generation}
 
 \subsubsection{Representing CFG path sets}
 
@@ -939,39 +1008,7 @@ Figures \ref{fig:code_example}(b) and \ref{fig:code_example}(c) show the generat
 \section{Handling programs with loops}
 
 
-\newcommand{\naive}{na\"ive\xspace}
-\newcommand{\Program}{\ensuremath{P}\xspace}
-\newcommand{\Forward}{\ensuremath{\Program^{+}}\xspace}
-\newcommand{\Inverse}{\ensuremath{\Program^{-}}\xspace}
-\newcommand{\Input}{\ensuremath{I}\xspace}
-\newcommand{\Output}{\ensuremath{O}\xspace}
-\newcommand{\ExtraOuts}{\ensuremath{S}\xspace}
-\newcommand{\OutsS}{\ensuremath{\Outs+\ExtraOuts}\xspace}
-\newcommand{\Var}{\ensuremath{v}\xspace}
-\newcommand{\Vars}{\ensuremath{V}\xspace}
-\newcommand{\Exec}[4]{\ensuremath{{#1}\{{#2}={#3}\} \rightarrow \{{#2}={#4}\}}\xspace}
 
-
-%\newcommand{\vmu}{\ensuremath{v_{in}^I}\xspace}
-%\newcommand{\vinit}{\ensuremath{v_{in}}\xspace}
-%\newcommand{\veta}{\ensuremath{v_{\eta}}\xspace}
-%\newcommand{\vfinal}{\ensuremath{v_{out}}\xspace}
-%\newcommand{\vmup}{\ensuremath{v_{\mu}'}\xspace}
-%\newcommand{\viter}{\ensuremath{v_{out}^I}\xspace}
-%\newcommand{\viterp}{\ensuremath{v_{iter}'}\xspace}
-%\newcommand{\mufunc}{\ensuremath{v_{in}^I=\mu(v_{in},v_{out}^I)}\xspace}
-%\newcommand{\etafunc}{\ensuremath{v_{out}=\eta(v_{in}^I)}\xspace}
-\newcommand{\varmbox}[2]{\ensuremath{{#1}_{\tiny\mbox{#2}}}}
-\newcommand{\vmu}{\ensuremath{\varmbox{v}{in}^I}\xspace}
-\newcommand{\vinit}{\ensuremath{\varmbox{v}{in}}\xspace}
-\newcommand{\veta}{\ensuremath{\varmbox{v}{\eta}}\xspace}
-\newcommand{\vfinal}{\ensuremath{\varmbox{v}{out}}\xspace}
-\newcommand{\vmup}{\ensuremath{\varmbox{v}{\mu}'}\xspace}
-\newcommand{\viter}{\ensuremath{\varmbox{v}{out}^I}\xspace}
-\newcommand{\viterp}{\ensuremath{\varmbox{v}{iter}'}\xspace}
-\newcommand{\mufunc}{\ensuremath{\varmbox{v}{in}^I=\mu(v_{in},v_{out}^I)}\xspace}
-\newcommand{\etafunc}{\ensuremath{\varmbox{v}{out}=\eta(v_{in}^I)}\xspace}
-\newcommand{\Loop}{\ensuremath{L}\xspace}
 
 
 \newcommand{\pVSG}{\ensuremath{G_P}\xspace}
@@ -1109,7 +1146,7 @@ From this symmetry, we define the node incident to all three reverse edges as a 
 Later we will show how the search traverses these edges.
 
 Having built the CFG, the next step is to search it, producing the RG result.
-Recall from Section~\ref{sec:backstroke} that we are given a set of target nodes whose values we wish to eventually compute from a starting set of available nodes.
+Recall that we are given a set of target nodes whose values we wish to eventually compute from a starting set of available nodes.
 We search for a path from available nodes to target nodes; the subgraph representing paths is the RG, which is not necessarily unique.
 Our algorithm is similar to the one we have described previously~\cite{Hou2012}, but for loops we need three additional search rules:
 
@@ -1295,7 +1332,7 @@ Figure \ref{fig:loop_vsg}(b) shows its CFG in loop-closed SSA.
 The input is $n_0$ and the output $s_3$.
 Our goal is to generate a reverse program that takes $s_3$ as input and produces $n_0$.
 We build the VSG shown in Figure~\ref{fig:loop_vsg}(c), with forward and reverse edges shown as bold and dashed edges, respectively.
-Note that the equality between $n_3$ and 0 is acquired from solving constraints, a standard compiler technique, as discussed in Section~\ref{sec:discussions}.%
+Note that the equality between $n_3$ and 0 is acquired from solving constraints, a standard compiler technique.%
 %
 \footnote{For clarify, we remove the equality $n_1=s_2-s_1$, as this relation will not be used during the search.}
 %
@@ -1390,8 +1427,20 @@ After the transformation, all loops in the program become while loops and our me
 
 \chapter{Synthesis for programs with arrays}
 
+Usually data-flow analysis for arrays is more difficult than that for scalars. 
+Unlike an scalar, each element in an array does not have a static unique name, but is represented as an array name and an index. 
+Two variables as indices of the same array with the same value bring aliases to the indexed element, and this aliasing is difficult to be detected at compile time. 
+Fortunately, with the help of the Array SSA \cite{Rus} proposed for programs with arrays, we could build the VSG for such programs and develop a searching rule in order to generate a valid RG. 
+The Array SSA tries to match definitions and uses of partial array regions, and we will also employ such array regions in our VSG as another condition of equalities between arrays (the condition we previous used is  control flow path set). 
+As a result, we can still reuse the whole framework we previously proposed  to handle programs with arrays.
 
-\newcommand{\Drawgraph}[2]{
+In this chapter, we first introduce the Array SSA, then describe how we make use of it and add array nodes and edges in the VSG. Then we still divide the programs with arrays into two categories: programs without and with loops. 
+We will show how we handle loop-free programs, and propose a method to deal with more challenging programs with loops.
+%In this chapter we will use an Array SSA proposed in [] in which concrete array regions are employed.
+%Based on this Array SSA, we could build the VSG with special array nodes inside.
+%By modifying the searching rules on the VSG, we will see that we could handle programs with arrays using the same framework as before. 
+
+\newcommand{\Drawgraph}[3]{
 	\begin{figure}[H]
 	\centering
 	\begin{tikzpicture} [auto, >=stealth', scale=.8]
@@ -1408,6 +1457,7 @@ After the transformation, all loops in the program become while loops and our me
 	
 	\end{tikzpicture}
 	\caption{#2}
+	\label{#3}
 	\end{figure}
 }
 
@@ -1416,24 +1466,108 @@ After the transformation, all loops in the program become while loops and our me
 
 \section{Array SSA}
 
-In the original SSA, when an element of an array is modified, the array itself is assigned with a new version, and the whole array is killed by that definition. Here we introduce an array SSA form originally proposed by [], in which array definitions usually kill only a subregion but not the whole array. This new SSA form representation can accurately represents the use-def relations between array regions. 
+In the original SSA, when an element of an array is modified, the array itself is assigned with a new version, and the whole array is killed by that definition. 
+In Array SSA, the definition of an array element only kills the previous definition of that element represented by a subregion but not the whole array. 
+This new SSA form representation can accurately represent the use-def relations between array regions. 
 
-There are four special $\phi$ functions defined for arrays: a $\delta$ function accounts for a partial kill after an element of the array is defined; a $\mu$ function defined at the begging of the loop header just as it for scalars; a $\eta$ function defined at the exit of a loop as the output of the loop; a $\gamma$ function defined at the join node in CFG joining definitions of arrays from different control flow paths.
+There are three special $\phi$ functions defined for arrays: a $\delta$ function accounts for a partial kill after an element of the array is defined; a $\mu$ function is defined at the beginning of the loop header just as it for scalars; a $\eta$ function defined at the exit of a loop as the output of the loop. 
+%a $\gamma$ function defined at the join node in CFG joining definitions of arrays from different control flow paths.
 
 %there is one special $\phi$ function (called a $\delta$ function) added just after the definition, from which a partial kill is represented. For example:
 
 
 \subsection{$\delta$ function}
  
- When an element of an array is modified, except renaming the array's name (assigning it with a new version), after this definition a special $\phi$ function, which is called a $\delta$ function, is defined. 
+ When an array element  is modified, except renaming the array's name (assigning it with a new version), a $\delta$ function is defined just after the definition to that element. 
+The $\delta$ function summarizes the data-flows of all elements in the array and builds accurate def-use relations with the help of array regions.
  The syntax of a $\delta$ function is shown below:
  $$[a_n, @a_n] = \delta(a_0, [a_1, @a_1^n], [a_2, @a_2^n],  ... , [a_m, @a_m^n] )$$
  $$where \; @a_n=\bigcup_{k=1}^m@a_k^n \; and \; @a_i^n \cap a_j^n = \emptyset, \forall 1\le i,j \le m, i \ne j$$
 
 In the equation above, $@a_k^n$ represents the array region in which the definitions of all elements of $a_k$ are not killed before the definition of $a_n$.
- For example below, after the definition in the second line, there is a $\delta$ function that defines a new version of the array $a$ as $a_2$.
+ The code below shows two $\delta$ functions after the definitions of two array elements respectively.
+ \begin{flalign*} 
+& int \; a_0[N], i_0, j_0; \\
+& a_1[i_0] = ...;\\
+& [a_2, @a_2] = \delta (a_0, [a_1, @a_1^2]); \\
+& a_3[j_0] = ...;\\
+& [a_4, @a_4] = \delta (a_0, [a_2, @a_2^4], [a_3, @a_3^4]); 
+\end{flalign*} 
+where $@a_1^2=@a_2=\{i_0\}, @a_2^4=\{i_0\}-\{j_0\}, @a_3^4=\{j_0\}, @a_4=\{i_0\}\cup\{j_0\}$. Note each array region is represented by a set including symbols (constants or SSA names). We will discuss the representation of array regions later.
+
+In this example, after the definition in the second line, there is a $\delta$ function that defines a new version of the array $a$ as $a_2$. 
+%In addition, each argument of the $\delta$ function is a definition of the array with a region. 
+The argument $ [a_1, @a_1^2]$ of the $\delta$ function means that all elements of $a_2$ in the region $@a_1^2=\{i_0\}$ are defined by $a_1$. 
+The first argument $a_0$ has the definitions of the elements in the region not belonging to other arguments.
  %Each argument except the first one is a tuple $[a_n, @a_n]$ including a definition of the array and the corresponding array region. 
- All elements in this region The $\delta$ function summarizes the reaching definitions of all elements: after one of them is redefined: 
+% All elements in this region The $\delta$ function summarizes the reaching definitions of all elements: after one of them is redefined: 
+
+%In this example, after the definition in the second line, there is a $\delta$ function that defines a new version of the array $a$ as $a_2$. In $a_2$, only the value indexed by $i$ equals that in $a_1$, and any other value equals the corresponding one in $a_0$. This means only the $i$th value of $a_0$ is killed by the definition of $a_1$.
+
+
+\subsection{$\mu$ and $\eta$ functions}
+
+Preiously when we handle loops with scalars, we introduced a $\mu$ function for each variable modified in the loop. 
+The arguments in the $\mu$ function come from outside and inside of the loop, and each definition of the $\mu$ function kills all previous definitions. 
+In Array SSA,  for each array modified in the loop we also define a $\mu$ function in the loop header receiving definitions from outside and inside of the loop. However, like a $\delta$ function, a $\mu$ function only kills the definition in some regions of the array, and the region is related to the loop index. Let $i$ be the loop index, then all regions in a $\mu$ function are functions of $i$. The syntax of a $\mu$ function is defined by the following equation.
+ $$[a_n, @a_n] = \mu(a_0, (i=1,p), [a_1, @a_1^n(i)], [a_2, @a_2^n(i)],  ... , [a_m, @a_m^n(i)] )$$
+
+In this equation the sets $@a_k^n(i)$ are functions of the loop index $i$ and they represent the sets of memory locations defines in some iterations $j<i$ by definition $a_k$ and not killed before reaching the beginning of iteration $i$. 
+For any array element defined by $a_k$ in some iteration $j < i$, in order to reach iteration $i$, it must not be killed by other definitions to the same element. 
+There are two kinds of definitions that will kill it: definitions ($Kill_s$) that will kill it within the same iteration $j$ and definitions ($Kill_a$) that will kill it at iterations from $j +1$ to $i-1$.
+The definition of $@a_k^n(i)$ is shown below.
+ $$@a_k^n(i)=\bigcup_{j=1}^{i-1}\left[@a_k(j)-\left(Kill_s(j) \cup \bigcup_{l=j+1}^{i-1}Kill_a(l)\right)\right]$$
+ $$ where \; Kill_s = \bigcup_{h=k+1}^m @a_h, \; and \; Kill_a=\bigcup_{h=1}^m@a_h$$
+
+%\section{Arrays in the VSG}
+
+\section{Handling arrays in loop-free programs}
+
+\subsection{Array region representation}
+
+%Unless explicitly indicated, when we retrieve an array, we are retrieving all elements of it. 
+Given a C/C++ style array $a[N]$ with length $N$, then all elements can be represented by an interval $[0,N-1]$, or $[0:N-1]$. 
+We will use this interval as a set that includes all integers in that interval, and hence an array region becomes an integer set.
+%Here $[0,N)$ represents a set containing all integers in this interval. 
+%We will use this representation through this report. 
+$[0:N-1]$ represents the \emph{universal set} of all regions of the array $a$, denoted by $\mathcal{A}(a)$. 
+%Instead of using $@a$, we use $R$ to represent a region in an array. 
+
+Now we define some basic array regions that are commonly used later:
+%Among all its subsets, there are some special ones: 
+
+\begin{itemize}
+\item The region containing only one integer is represented by $\{i\}$, where $i$ is a constant or an SSA name. 
+\item The complementary set $\overline{\{i\}} = \mathcal{A}(a)-\{i\}$ represents all other elements except the $i$th one. 
+
+\item The triplet representation $[a:b:c]$ represents all integers between $a$ and $c$ with stride $b$. If $b=1$, it can be simplified as $[a:c]$. 
+
+\end{itemize}
+
+All set operations can be performed on array regions. Actually, we will rely on those operations to determine if all elements of an array are retrieved during the search on the VSG. 
+In order to build a more accurate RG, we need to simplify an expression with set operations.
+The process of simplification  depends on the properties of set operations, including identity laws, domination laws, idempotent laws, commutative law, associative laws, distributive laws, etc..
+In addition, since an array region set may contain SSA names. 
+The knowledge of the relations between them can also help to simplify an set expression.
+For example, $\{i\} \cup \{j\} = \{i\} =\{j\}$ if $i=j$, and $\{i\} \cap \{j\} = \emptyset$ if $i\ne j$.
+%For example, $\{i\} \cup \overline{\{i\}} = [0,N)=U$. 
+
+%For induction variables in a loop (assume it has depth one), we use two regions for arrays indexed by an induction variable: one for the local iteration, and one for a summary for the scope outside of the loop. 
+
+\subsection{Arrays in the VSG}
+
+For each definition of an array we add a special node in the VSG as its representation and we call it an \emph{array node}. 
+Any element of an array is a scalar and is still denoted by a normal value node. 
+%Remember that every edge in a VSG is attached with the path information.
+For any edge between two array nodes $a_x$ and $a_y$, an array region $R$ is attached to it, showing that $a_x$ and $a_y$ have the same values for all elements in the region $R$.
+For each access of an array, e.g. $a_x[i]$, we also add a region $\{i\}$ on the edge between VSG nodes representing $a_x$ and $a_x[i]$.
+
+We will build the VSG for arrays based on the Array SSA with some modifications. 
+%Let's see first how we build arrays nodes for a $\delta$ function. 
+In Array SSA, a $\delta$ function is always defined under a definition to an element of it, and those two definitions create two names of the same array. 
+To reduce the number of array nodes in VSG, we combine those two names into one.
+%, and connect this array node to other array nodes and the definition of its element. 
+For example, for the following code:
 \begin{flalign*} 
 & int \; a_0[N]; \\
 & a_1[i] = ...;\\
@@ -1441,120 +1575,223 @@ In the equation above, $@a_k^n$ represents the array region in which the definit
 & a_3[j] = ...;\\
 & [a_4, @a_4] = \delta (a_0, [a_2, @a_2^4], [a_3, @a_3^4]); 
 \end{flalign*} 
-In this example, $@a_1^2=@a_2=\{i\}, @a_2^4=\{i\}-\{j\}, @a_3^4=\{j\}, @a_4=\{i\}\cup\{j\}$.
-%In this example, after the definition in the second line, there is a $\delta$ function that defines a new version of the array $a$ as $a_2$. In $a_2$, only the value indexed by $i$ equals that in $a_1$, and any other value equals the corresponding one in $a_0$. This means only the $i$th value of $a_0$ is killed by the definition of $a_1$.
-
-
-\subsection{$\mu$ and $\eta$ functions}
-
-In the last chapter, when we handle loops with scalars, we defined a $\mu$ function for each variable modified in the loop. The arguments in the $\mu$ function are from outside and inside of the loop, and each definition of the $\mu$ function kills all previous definitions. In Array SSA,  for each array modified in the loop we also define a $\mu$ function in the loop header receiving definitions from outside and inside of the loop. However, like a $\delta$ function, a $\mu$ function only kills the definition in some regions of the array, and the region is related to the loop index. Let $i$ be the loop index, then all regions in a $\mu$ function are functions of $i$. The syntax of a $\mu$ function is defined by the following equation.
- $$[a_n, @a_n] = \mu(a_0, (i=1,p), [a_1, @a_1^n], [a_2, @a_2^n],  ... , [a_m, @a_m^n] )$$
-
-Above sets $@a_k^n$ are function of the loop index $i$ and they represent the sets of memory locations defines in some iterations $j<i$ by definition $a_k$ and not killed before reaching the beginning of iteration $i$. 
-For any array element defined by $a_k$ in some iteration $j < i$, in order to reach iteration $i$, it must not be killed by other definitions to the same element. 
-There are two kinds of definitions that will kill it: definitions ($Kill_s$) that will kill it within the same iteration $j$ and definitions ($Kill_a$) that will kill it at iterations from $j +1$ to $i-1$.
- $$@a_k^n(i)=\bigcup_{j=1}^{i-1}\left[@a_k(j)-\left(Kill_s(j) \cup \bigcup_{l=j+1}^{i-1}Kill_a(l)\right)\right]$$
- $$ where \; Kill_s = \bigcup_{h=k+1}^m @a_h, \; and \; Kill_a=\bigcup_{h=1}^m@a_h$$
-
-\section{Arrays in the VSG}
-
-\subsection{Regions in array}
-
-Unless explicitly indicated, when we retrieve an array, we are retrieving all elements of it. 
-Given a C/C++ style array $a[N]$ with length $N$, we want to retrieve every $a[i]$, where $i\in[0,N)$. Here $[0,N)$ represents a set containing all integers in this interval. 
-%We will use this representation through this report. 
-We also call the set $[0,N)$ as the \emph{universal set} for the array $a[N]$, denoted by $U$. 
-Instead of using $@a$, we use $R$ to represent a region in an array. 
-
-Among all its subsets, there are some special ones: 
-
-\begin{enumerate}
-\item $\{i\}$ is a set with one element inside, representing a specific position in the array.
-
-\item The complementary set $\overline{\{i\}}$ represents all other elements except the $i$th one. 
-
-\item An interval (either open or closed) $[a, b)$ represents all integers inside. We can also use $[a:b]$ instead of $[a,b]$, and in the future for those induction variables with stride more that 1 (2 for example), we will use $[a:2:b]$ to express its value range.
-
-\end{enumerate}
-
-All set operations can be performed on array regions. For example, $\{i\} \cup \overline{\{i\}} = [0,N)=U$. We will depend on those operations to determine if all elements of an array are retrieved during the search on the VSG. 
-
-%For induction variables in a loop (assume it has depth one), we use two regions for arrays indexed by an induction variable: one for the local iteration, and one for a summary for the scope outside of the loop. 
-
-\subsection{Arrays in the VSG}
-
-We define a special node in the VSG to represent an array and we call it an array node. 
-Any element of this array is a scalar and is still denoted by a normal value node in VSG. 
-Remember that every edge in a VSG is attached with the path information.
-For any edge between two array nodes $a_x$ and $a_y$, besides  the path information, we also attach an array region $R$ on it. Then $a_x$ and $a_y$ have the same values for all elements in the region $R$.
-In addition, for each access of an array, e.g. $a_x[i]$, we also add a region $\{i\}$ on the edge between VSG nodes representing $a_x$ and $a_x[i]$.
-
-To build the VSG for arrays, we need to make some modifications based on the Array SSA. Let's see first how we build arrays nodes for a $\delta$ function. 
-Note that a $\delta$ function is always defined under a definition to an element of it, and those two definitions create two names of the same array. 
-To reduce the number of array nodes in VSG, we combine those two names into one, and connect this array node to other array nodes and the definition of its element. 
-For example, for the following code:
+We will transform it into the code below:
 \begin{flalign*} 
 & int \; a_0[N]; \\
 & a_1[i] = ...;\\
-& [a_2, @a_2] = \delta (a_0, [a_1, @a_1^2]); 
+& a_1 = \delta ([a_0, \overline{\{i\}}], [a_1, \{i\}]);  \\
+& a_2[j] = ...;\\
+& a_2 = \delta ([a_1, \overline{\{j\}}], [a_2, \{j\}]); 
 \end{flalign*} 
 
-We don't create the new name $a_2$, but maintain a correct data-flow relations between $a_1$ and $a_0$, and also $a_1$ and $a_1[i]$. 
-As a consequence, all later use of $a_2$ will be replaced by $a_1$.
-The corresponding nodes and edges in the VSG are shown below:
+After the definition of $a_1$, instead of creating a new name $a_2$, we maintain a correct equality relations between $a_1$ and $a_0$, and also $a_1$ and $a_1[i]$. 
+In the VSG, we  add an edge with region $\overline{\{i\}}$ between nodes of $a_0$ and $a_1$, and  add another edge with region $\{i\}$ between node of $a_1$ and $a_1[i]$. 
+With the help of this region information, we can make a full kill to $a_0$ when $a_1$ is defined (that is, $a_0$ will never be used after the definition of $a_1$). 
+Similarly, when $a_2[j]$ is defined, we create another $\delta$ function that shows the equality between $a_1$ and $a_2$ in the region $\overline{\{j\}}$, and $a_2$ and $a_2[j]$ in the region $\{j\}$.
+In this way, a $\delta$ function always has two arguments: one is the newly defined array with the region $\{i\}$ where $i$ is the index of the defined element; one is the reaching definition of the array before defining the element, with the region $\overline{\{i\}}$.
+%As a consequence, all later use of $a_2$ will be replaced by $a_1$.
+The created nodes and edges in the VSG are shown below:
 
 
 \Drawgraph{
-    \node [array, label=below:$a_0$] (a0) at (0,0) {};
-    \node [array, label=below:$a_1$] (a1) at (3,0) {};
-    \node [scalar, label=below:${a_1[i]}$] (a1i) at (6,0) {};
+    \node [array, label=above:$a_0$] (a0) at (0,0) {};
+    \node [array, label=above:$a_1$] (a1) at (3,0) {};
+    \node [scalar, label=above:${a_1[i]}$] (a1i) at (6,0) {};
+    \node [array, label=below:$a_2$] (a2) at (3,-3) {};
+    \node [scalar, label=below:${a_2[j]}$] (a2j) at (6,-3) {};
     \path
     (a1) edge node  [lbl, swap] {$\overline{\{i\}}$} (a0)
-    (a1) edge node  [lbl] {${\{i\}}$} (a1i);
-}{An edge labeled by a region between two array nodes.}
+    (a1) edge node  [lbl] {${\{i\}}$} (a1i)
+    (a2) edge node  [lbl, swap] {$\overline{\{j\}}$} (a1)
+    (a2) edge node  [lbl] {${\{j\}}$} (a2j)
+    ;
+}{The VSG edges with array regions between array nodes.}{fig:array-vsg}
 
+In the VSG, each array node is represented by a square node, being differentiated from circle nodes for scalars. 
+For each element access of an array $a_x[i]$, the corresponding value node will be connected to the array node for $a_x$ with region $\{i\}$.
+%The region informations are attached to edges incident to array nodes.
 
-For Array SSA, at join node there is also a $\phi$ function for an array if it has different definitions from incoming edges. In this case, we take it in the same way as scalars. In the VSG, we still build a $\phi$ array node representing the array defined by the $\phi$ function. All edges incident to this node has the region $[0,N)$. 
-
-The special searching rules for arrays:
-
-1. For each edge incident to an array node, except the path information, there is also a region information. 
-
-2.  If the search starts from an array node, it tried to retrieve all elements of that array. Then the region $[0,N)$ is attached to this search. This is very similar to the path information. 
-
-3. When the search reaches an element node from an array node, the region of the search can be removed. The search from node a to node b has the region information iff a or b is an array node.
-
-4. In the RG, for each array node, R(in)=R(out).
-
+In Array SSA,  $\phi$ functions\footnote{In the original paper of Array SSA, it is called a $\gamma$ function.} defined for arrays at a join node in the CFG has the same meaning as those for scalars.
+%there is also a for an array if it has different definitions from incoming edges. In this case, we take it in the same way as scalars. 
+Therefore, in the VSG we build a $\phi$ array node representing the array defined by the $\phi$ function and connect it to all of its arguments with correct control flow path set and  the full array region. 
 
 
 
 
-\chapter{Conclusion}
-
-\nocite{*}
-%% We need this since this file doesn't ACTUALLY \cite anything...
-%%
-\appendix
-\chapter{Some Ancillary Stuff}
-
-Ancillary material should be put in appendices, which 
-appear just before the bibliography. 
-
-\begin{postliminary}
-\references
 
 
-\end{postliminary}
+%Note that an array can only be modified through each of its elements.
 
-\begin{abstract}
-  This is the abstract that must be turned in as hard copy to the
-  thesis office to meet the UMI requirements. It should \emph{not} be
-  included when submitting your ETD. Comment out the abstract
-  environment before submitting. It is recommended that you simply
-  copy and paste the text you put in the summary environment into this
-  environment. The title, your name, the page count, and your
-  advisor's name will all be generated automatically.
-\end{abstract}
+\subsection{Search the VSG to retrieve an array}
+
+The searching rules for arrays on the VSG is similar to that for scalars, except we have to take the array region into account.
+In the VSG, every edge incident to an array node has both control path information and array region information. 
+During the search, once such an edge is selected, the search begins to have an addition goal to retrieve all elements of the corresponding array in the region on that edge.
+Only when the search reaches available array nodes or scalar value nodes can the region goal added to the search be removed.
+At the beginning of the search, if an array node is the target node, then the search needs to retrieve all elements of the array.
+%The special searching rules for arrays:
+
+During the search on the VSG, it is possible that an edge is selected several times in searching for more than one values with different control flow paths and array regions. 
+Therefore, in the RG, the control flow path and array region sets are paired as $[P,R]$, where $P$ and $R$ stand for the path set and array region set respectively.
+ And it is possible that an edge $e$ has several such pairs $[P_0,R_0],[P_1,R_1],...,[P_n,R_n]$.
+We require that $P_i \cap P_j = \emptyset, i\ne j$.
+Then for the edge $e$ we can get those sets through $P_i(e)$ or $R_i(e), i = 0,...,n$.
+
+As previously, the searching rule should guarantee the search result RG to meet several properties. 
+For each edge $e$ in the RG, let $P(e)$ denote the control flow path set on it, and let $R(e)$ denote the array region set on it.
+Those properties include:
+
+\begin{enumerate}[I)]
+
+\item For each target array node $n$ of the array $a$, and for each control flow path $p$,
+	$$\bigcup_{\substack{\mathit{out} \in \text{OutEdges}(n)  \\  p \in P_i(out)}}R_i(\mathit{out}) \quad = \quad \mathcal{A}(a) $$ 
+	\label{rg-property-1}
+
+\item For each array node $n$ that is neither a target node nor an available node, and for each control flow path $p$,
+	$$\bigcup_{\substack{\mathit{out} \in \text{OutEdges} (n) \\ p \in P_i(out)}} R_i(out) = \bigcup_{\substack{\mathit{in} \in \text{InEdges} (n)  \\  p \in P_j(in) }}R_j( \mathit{in} )$$ 
+
+\item For each array node $n$, given any two outgoing edges $n\to s$ and $n\to t$, for each control flow path $p$, and $p \in P_i(n \to s)$, and $p \in P_j(n \to t)$, then $R_i(n\to s) \cap R_j(n\to t) = \emptyset$.
+
+\item If $e$ is a route graph edge and its corresponding edge in the VSG is $e'$, then for each $R_i(e)$,
+$R_i(e) \subseteq R(e')$.
+	\label{rg-property-4}
+
+%\item For each directed cycle with edges $e_1 \dots e_n$,  $\quad \bigcap_{i=1}^n{P(e_{i})} = \emptyset$
+	%\label{rg-property-5}
+
+\end{enumerate}
+
+
+
+
+%1. For each edge incident to an array node, except the path information, there is also region information. 
+
+%2.  If the search starts from an array node, it tried to retrieve all elements of that array. Then the region $[0,N)$ is attached to this search. This is very similar to the path information. 
+
+%3. When the search reaches an element node from an array node, the region of the search can be removed. The search from node a to node b has the region information iff a or b is an array node.
+
+%4. In the RG, for each array node, R(in)=R(out).
+
+
+\subsection{State saving on an array and its elements}
+
+In the VSG, to enable the capability of generating state saving statements in forward program, there is still a state saving node, which is connected to all scalar value nodes as well as array nodes. 
+Each state saving edge connected to an array nodes of the array $a$ has the region   $\mathcal{A}(a)$.
+When the search reaches a state saving edge incident to an array node, the array region on it will be calculated and updated according to the searching rule. 
+As a result, it is possible that the final region on this state saving edge is unknown at compile time or is represented by an expression with several set operations.
+To facilitate the code generation, we require that the region on a state saving edge must fall into two categories: a single element, or the full region. 
+In the first case, we only need to store a single element of the array; in the second case, we will store the whole array by building a loop, and the size of the loop needs to be retrieved before storing the whole array. 
+
+
+\Drawgraph{
+    \node [array, label=above:$a_0$] (a0) at (0,0) {};
+    \node [array, label=above:$a_1$] (a1) at (3,0) {};
+    \node [scalar, label=below:${a_1[i]}$] (a1i) at (6,0) {};
+    \node [array, label=below:$a_2$] (a2) at (3,-3) {};
+    \node [scalar, label=below:${a_2[j]}$] (a2j) at (6,-3) {};
+    \node [scalar] (ss) at (9,0) {SS};
+    \path
+    (a1) edge node  [lbl, swap] {$\overline{\{i\}}$} (a0)
+    (a1) edge node  [lbl] {${\{i\}}$} (a1i)
+    (a2) edge node  [lbl, swap] {$\overline{\{j\}}$} (a1)
+    (a2) edge node  [lbl] {${\{j\}}$} (a2j)
+    (a0) edge [bend left] (ss)
+    (a1) edge [bend left] (ss)
+    (a1i) edge (ss)
+    (a2j) edge (ss)
+    ;
+}{A state saving node connecting all value nodes.}{fig:array-ss-vsg}
+
+\Drawgraph{
+    \node [array, label=above:$a_0$] (a0) at (0,0) {};
+    \node [array, label=above:$a_1$] (a1) at (3,0) {};
+    \node [scalar, label=below:${a_1[i]}$] (a1i) at (6,0) {};
+    \node [array, label=below:$a_2$] (a2) at (3,-3) {};
+    \node [scalar, label=below:${a_2[j]}$] (a2j) at (6,-3) {};
+    \node [scalar] (ss) at (9,0) {SS};
+    \path
+    (a1) edge [pre, red,ultra thick] node  [lbl, swap] {$\overline{\{i\}}$} (a0)
+    (a1) edge node  [lbl] {${\{i\}}$} (a1i)
+    (a2) edge [pre, red,ultra thick] node  [lbl, swap] {$\overline{\{j\}} \cap \overline{\{i\}}$} (a1)
+    (a2) edge node  [lbl] {${\{j\}}$} (a2j)
+    (a0) edge [post, red,ultra thick,bend left] node  [lbl] {$\{i\}$} (ss)
+    (a1) edge [post, red,ultra thick,bend left] node  [lbl,swap] {$\{j\}\cap \overline{\{i\}}$} (ss)
+    (a1i) edge (ss)
+    (a2j) edge (ss)
+    ;
+}{The search result is shown in bold red edges.}{fig:array-ss-rg}
+
+
+For example, Figure~\ref{fig:array-ss-vsg} shows the VSG for the code we used before, and Figure~\ref{fig:array-ss-rg} is the search result RG shown as bold edges.
+The array region on the edge from $a_1$ to $SS$ node is $\{j\}\cap \overline{\{i\}}$.
+And $\{j\}\cap \overline{\{i\}} = \left\{ \begin{array}{rcl}  \{j\} & \mbox{if} & i \ne j \\ \emptyset & \mbox{else} \end{array}\right.$. 
+If we cannot resolve the result of it at compile-time (that it, we don't know if $i$ and $j$ have the same value), we will use $\{j\}$ instead of $\{j\}\cap \overline{\{i\}} $ in the RG.
+In the generated code, we always perform a state saving on $a_1[j]$.
+
+
+%\section{Handling arrays with loops}
+
+%\section{Handling object access}
+
+%\section{Handling linked data structure}
+
+%This is what to be proposed in this proposal.
+
+\chapter{Proposed work: Synthesizing loops with arrays}
+
+In this thesis proposal, we propose a method of synthesizing reverse programs for loops with arrays. 
+%Usually arrays are updated in loops.
+There are two motivations of it: in optimistic  parallel discrete event simulation, if we can avoid performing state saving on an array that is modified in a loop and can be retrieved by another loop in the reverse program, the performance will be improved; 
+we also consider to generate the inverse for injective programs, such as lossless compression and encryption,  when state saving is not allowed (because the program is already injective or reversible, it is not necessary to generate a forward program). 
+
+We will continue to used the framework we previously proposed.
+When we build the VSG for an array updated in a loop, we will rely on the $\mu$ function in Array SSA. 
+Note that the region for each argument of the $\mu$ function is a function of the loop index.
+To calculate the exact region in which an array is modified in each iteration, we may need some restrictions on the array's index. 
+For example, if the array's index is an induction variable, it will make the calculation of regions much easier.
+
+After we solve the problems with arrays, we will try to extend this method to reversing programs with linked data structures. 
+The basic idea is that linked data structure can be transformed into arrays:
+in C/C++, a linked data structure is accessed by a pointer, and through this pointer we can get the data inside on each field. 
+Then we can treat each field as an array, and the pointer as the index of it.
+The code below gives an example of a data structure list, and in the loop the integer value of each node in the list is increased by one.
+
+ \begin{flalign*} 
+ & struct \;  Node \; \{ \\
+ & \;\;\;\;  int \; val; \\
+ & \;\;\;\; Node* \; next; \\
+ & \}; \\
+ & Node* \; head; \\
+ & while\; (head \; != \; NULL)\;\{ \\
+ & \;\;\;\; head->val++;\\
+ &\;\;\;\; head = head->next;\\
+ &\}
+ \end{flalign*} 
+
+In the code above, we can treat $val$ and $next$ as two arrays, then the loop will be transformed as the code below:
+ \begin{flalign*} 
+ & while\; (head \; != \; NULL)\;\{ \\
+ & \;\;\;\; val[head]++;\\
+ &\;\;\;\; head = next[head];\\
+ &\}
+ \end{flalign*} 
+ 
+However, unlike the index of an arrays that may have regular access patterns, we usually don't have enough information of the pointers pointing to linked data structures. 
+We will try to find out in which situation or under what conditions can we handle them.
+
+
+\section{A schedule of the proposed work}
+
+\begin{itemize}
+\item \emph{Now - December 2012}: Complete the algorithm of reversing loop with arrays.
+
+\item \emph{December 2012 - March 2013}: Study how to extend the method to deal with object accesses and linked data structures. Meanwhile, start to write the dissertation.
+
+\item \emph{March 2013}: Finish writing the dissertation.
+
+\item \emph{April 2013}: Dissertation defense. 
+\end{itemize}
+
+\bibliography{biblib2,more2,library2,biblib,more,library}
 
 \end{document}

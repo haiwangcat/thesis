@@ -1,0 +1,699 @@
+
+In this section we discuss how to retrieve an array or a subregion of it from a do-while loop. 
+(Remember that in Section~\ref{sec:other-loops} a method is proposed to transform an arbitrary loop into a while loop, which can also be further transformed into a do-while loop.)
+We will consider two scenarios: the array is modified in the loop, and it is just used in the loop.
+
+%Given an array, an element of it can only be retrieved from a loop if it is used inside.
+%No matter in which case, an element can only be retrieved only if it is defined or used in the loop. 
+%Because each element of an array is referenced by an index. 
+%In a loop, the index used on an array can either be a loop invariant or variant. 
+%If it is an invariant, it always references the same element of the array, which means it is only possible to retrieve that element from the loop through this index.
+%So let's look at loop variants as indices.
+
+
+%Also, here we assume that there are no nested loops.
+%We will discuss how to handle nested loops later.
+
+
+
+\subsection{The array being retrieved is modified in the loop}
+
+
+\newcommand{\Iuse}{\ensuremath{\mathcal{I}^a_{use}}\xspace}
+\newcommand{\Idef}{\ensuremath{\mathcal{I}^a_{def}}\xspace}
+\newcommand{\iternum}{\ensuremath{l.len}\xspace}
+\newcommand{\Ra}{\ensuremath{\mathcal{R}^t_{I}}\xspace}
+\newcommand{\RaComp}{\ensuremath{\overline{\Ra}}\xspace}
+\newcommand{\Rb}{\ensuremath{\mathcal{R}^t_O}\xspace}
+\newcommand{\Rc}{\ensuremath{\mathcal{R}^t_{O}}\xspace}
+\newcommand{\RcComp}{\ensuremath{\overline{\Rc}}\xspace}
+\newcommand{\Rd}{\ensuremath{\mathcal{R}_{U}}\xspace}
+\newcommand{\Subr}[2]{\ensuremath{R^a_{def}(#1,#2)}\xspace}
+\newcommand{\Span}[1]{\ensuremath{\bigcup_{t\in[0,\iternum)}{#1}}\xspace}
+\newcommand{\Edge}[2]{\ensuremath{#1\leftrightarrow#2}\xspace}\newcommand{\EdgeRight}[2]{\ensuremath{#1\rightarrow#2}\xspace}\newcommand{\EdgeLeft}[2]{\ensuremath{#1\leftarrow#2}\xspace}
+\newcommand{\SearchVal}[2]{\ensuremath{\texttt{Search}(#1,#2)}\xspace}
+\newcommand{\EdgeWithSubregion}[3]{\ensuremath{#1 \overset{#2}\longrightarrow #3}\xspace}
+\newcommand{\LoopInput}[1]{\ensuremath{#1_{init}}\xspace}
+\newcommand{\LoopOutput}[1]{\ensuremath{#1_{final}}\xspace}
+\newcommand{\IterInput}[1]{\ensuremath{#1_{in}}\xspace}
+\newcommand{\IterOutput}[1]{\ensuremath{#1_{out}}\xspace}
+\newcommand{\AIn}{\ensuremath{\LoopInput{a}}\xspace}
+\newcommand{\AOut}{\ensuremath{\LoopOutput{a}}\xspace}
+\newcommand{\AInI}{\ensuremath{\IterInput{a}}\xspace}
+\newcommand{\AOutI}{\ensuremath{\IterOutput{a}}\xspace}
+\newcommand{\IterInputSet}{\ensuremath{\mathcal{A}_{in}}\xspace}
+\newcommand{\IterOutputSet}{\ensuremath{\mathcal{A}_{out}}\xspace}
+
+
+
+
+Given a do-while loop $l$ that modifies an array $a$,  in SSA there are at least four important definitions of $a$ as shown below: the input/output of the loop \AIn and \AOut, and the input/output of each iteration \AInI and \AOutI.
+Now we consider the problem how to synthesize a loop in the reverse program to retrieve \AIn. 
+%
+\small
+ \begin{flalign*} 
+ & /*\;Input:\AIn \;*/\\
+& do\;\{\\
+& \;\;\;\;\AInI:=\mu(\AIn,\AOutI);\\
+& \;\;\;\;...;\\
+& \;\;\;\;\AOutI:=...;\\
+& \}\;while\;(...);\\
+& \AOut:=\eta(\AOutI);\\
+\end{flalign*} 
+\normalsize
+%
+%In Array SSA representation for the array $a$ the input and output of this loop are \AIn and \AOut, and the input and output of each iteration are $\AInI$ and $\AOutI$. 
+%As shown above, the input of each iteration $\AInI$ is defined by a $\mu$ function in Array SSA.
+
+
+A simple idea to retrieve \AIn is using the method developed for scalars~\cite{HouRC}: in each iteration, we retrieve all elements of \AInI from \AOutI and/or possibly other values.
+%
+We don't consider to store values in a loop in the forward program, because it always brings high cost.
+%
+Consequently, in each iteration it is not guaranteed that all elements of \AInI can be retrieved, but possibly only a subregion of it.
+However, the retrieval of a subregion  in an iteration may require another subregion of the same or another array in the next iteration, and it difficult to check the equalities/inequalities between  values defined in different iterations, in order to resolve the set operations during the search. 
+In addition, because of the data dependences between two successive iterations, the generated loop will have the opposite iteration order to the original one.
+Given a variable $v$, let $v^t$ be its value in the iteration $t$. 
+Assume this value is needed in the generated loop.
+Then we say the generated loop has the the identical or opposite iteration order to the original loop, if this variable has the same value as $v^t$ in the iteration $t$ or $\iternum-t-1$ of the generated loop respectively, where \iternum is the number of iterations for both original and generated loop.
+However, not like scalars,  there may not exist any data dependences between two iterations in an array that is updated in a loop, and then we may be able to choose either identical or opposite iteration order for the generated loop.
+In some cases we may need this flexibility
+(we will see such a case in Section~\ref{sec:case-study}).
+
+To overcome those two drawbacks, we develop a new searching strategy, which  is based on the fact that each element can be retrieved through the loop only if it is used inside.
+Indeed, if that element is not used in the loop, in the VSG we don't have any equality information of it. 
+Assume the array $a$ is used in the loop through the index $i$.
+%Let $i^t$ represent the value of $i$ in the iteration $t$.
+We will try to retrieve the value of $\AIn[i^t]$ through $\AInI[i^t]$  if $\AIn[i^t]=\AInI[i^t], \forall t\in [0,\iternum)$.
+The successful retrieval of $\AIn[i^t],\forall t\in [0,\iternum)$ then leads to the retrieval of the subregion $\bigcup_{t\in [0,\iternum)}{\{i^t\}}$ of \AIn.
+Below we will introduce how we build the VSG as shown in Figure~\ref{fig:four-nodes}  to enable this approach and how to search the value of $\AIn[i]$ in each iteration.
+
+
+
+%Given an index $i\in \Iuse$, if $i$ is a loop invariant, then we can take $a[i]$ as a scalar and get its value using our previous method.
+%If $i$ is a loop variant, then it could have different values in different iterations. 
+%Let $t$ be the loop index, where $t\in [0,\iternum)$ and \iternum is the number of iterations of the loop $l$.
+%Given an index $i\in \Iuse$, then during all iterations, the subregion of $a$ accessed through $i$ is $\Span{i}=\bigcup_{t\in [0,\iternum)}{\{i^t\}}$.
+%In the iteration $t$, $\AIn[i^t]$ can be retrieved if $\AInI[i^t]$ can be retrieved and $\AIn[i^t]=\AInI[i^t]$.
+%Also, we assume in the loop $i$ is used in $a_x[i]$.
+%Therefore, if we can retrieve each $a[i^t]$ from the loop, we can finally get $R_l(i)$ of $a$.
+%However, there are several problems to be solved.
+%We have to make sure that $a[i^t]$'s value is not modified through iterations from 0 to $t-1$. 
+%If it is changed, then the value we retrieved through $a[i^t]$ is not $\AIn[i^t]$.
+%Second, we have not defined an order of iterations when we retrieve $a[i]$.
+%That is, we can do it for $t$ from $0$ to \iternum-1, or  from \iternum-1 to $0$, or other orders.
+
+
+\subsubsection{Build the VSG for arrays modified in a loop}
+
+%As seen above, an array that is modified in a loop has at least four definitions as the input/output of the loop/each iteration respectively. 
+%Here we describe how to build the nodes and edges for those definitions in the VSG.
+
+%
+In SSA, the input of each iteration $\AInI$ is defined by a $\mu$ function, which is a special $\phi$ function whose arguments contain definitions from both inside and outside of the loop.
+Given such a $\mu$ function: $\AInI=\mu(\AIn,\AOutI)$, 
+let's consider   at the beginning of the iteration $t$, what is the subregion \Ra such that \EquivRange{\AIn}{\AInI}{\Ra}.
+
+%Let $I(a,l)$ be a set containing all indices at which the array $a$ is modified in the loop $l$.
+Let $\Subr{m}{n}$ define all indices at which the array $a$ is modified from the beginning of the iteration $m$ to the beginning of the iteration $n$. 
+Also, let \Iuse and \Idef be two sets containing all indices of $a$ from which the elements of $a$ are used and defined in the loop respectively.
+Since each modification to $a$ is made through an index in \Idef, we have:
+%Then at the end of the iteration $t$, the subregion of the array that will be modified during the following iterations is 
+$$\Subr{m}{n} = \bigcup_{i\in \Idef}{\bigcup_{t\in [m,n)}{\{i^t\}}}$$
+And $\Subr{m}{m}=\emptyset$.
+Then \Ra is a complementary set of \Subr{0}{t}:
+$$\Ra=\overline{\Subr{0}{t}}$$
+%
+%From the $\mu$ function in (\ref{eq:mu-function})  we know at the beginning of the iteration $t$, we have \EquivRange{\AIn}{\AInI^t}{\Ra}, and \EquivRange{\AInI^t}{\AOutI^{t-1}}{\RaComp} if $t>0$.
+%
+To show \EquivRange{\AIn}{\AInI}{\Ra}, we attach \Ra to the VSG edge \Edge{\AIn}{\AInI} as shown in Figure~\ref{fig:four-nodes}.
+With the assist of \Ra, checking if $\AIn[i^t]=\AInI[i^t]$ becomes checking if $i^t\in \Ra$.
+%For each $i\in$ \Iuse, the element $\AIn[i^t]$ can be retrieved through $\AInI[i^t]$ only if $i^t \in \Ra$.
+%Note that  the edge from $\AInI$ to $\AOutI$ is a directed edge, which only can be selected during the search if we are getting \AOut from the loop. \TODO{Reasons?}
+
+
+Based on the $\mu$ function $\AInI=\mu(\AIn,\AOutI)$, we also connect \AInI and \AOutI with two directed edges. 
+However, each edge shows an equality across iterations.
+The edge $\AInI \to \AOutI$ implies the data dependence from values in the iteration $t$ to the values in the iteration $t-1$.
+If this edge is selected  in the RG, the generated loop must follow the same iteration order as the original loop.
+%, because in this order, the value in iteration $t$ depends on the value in previous iterations.
+We call  this edge  a \emph{forward edge} as in~\cite{HouRC}.
+Similarly, if the edge $\AOutI \to \AInI$ is selected in the RG, the generated loop should have the opposite iteration order to the original loop, and we call this edge a \emph{reverse edge}.
+Apparently, the search result of one value (either scalar or array) cannot contain both forward and reverse edges, since the generated loop can only have one iteration order.
+To show this difference, in Figure~\ref{fig:four-nodes}, a forward edge is shown as a dotted edge, and a reverse edge is shown as a dashed edge.
+
+
+\begin{comment}
+%
+Note that once the edge \EdgeRight{\AOutI^t}{\AInI^{t+1}} is selected during the search, we get an explicit data dependence between two iterations.
+That is, in order to obtain a value in the iteration $t$, we need another value in the iteration $t+1$. 
+As a result, the generated loop will have the opposite iteration order as the original one.
+Similarly, the edge from \AInI to \AOutI is actually \EdgeRight{\AInI^t}{\AOutI^{t-1}}, and if this edge is selected during the search, the generated loop will have the same running order as the original one. \TODO{Show rvs and fwd edges.}
+%
+\end{comment}
+
+
+
+The output of the loop \AOut is the output of the last iteration. 
+%And in SSA \AOut is defined by a $\eta$ function with only one argument $\AOutI$. 
+At the end of the iteration $t$, let \Rb be a subregion in which the elements of $\AOutI$ will not be modified in the following iterations and hence \EquivRange{\AOutI}{\AOut}{\Rb}.
+%Then we make a new version of this $\eta$ function from the view of the end of each iteration: $\AOut=eta(\AOutI)$.
+Then we have 
+$$\Rc=\overline{\Subr{t+1}{\iternum}}$$
+We add this subregion to the edge \Edge{\AOutI}{\AOut}. 
+With the help of \Rc, during the search if $\AOutI[i^t]$ is required and $i^t\in \Rc$, the search can exit the loop through the edge \EdgeRight{\AOutI}{\AOut}.
+Otherwise, the search will pick the reverse edge \EdgeRight{\AOutI}{\AInI} and enter the next iteration.
+
+%This edge can only be selected if we are retrieving inputs of the loop.
+
+Finally, we add a summary edge between \AIn and \AOut with the subregion $\Rd=\overline{\Subr{0}{\iternum}}$, in which all elements remain unchanged after the loop.
+Theoretically, each element that is not modified in the loop can be retrieved through this edge.
+
+\begin{comment}
+To sum up, the three special subregions we just defined are:
+\begin{itemize}
+\item \Ra: The subregion in which the elements of $a$ are not modified in the previous iterations at the beginning of the iteration $t$.
+\item \Rb: The subregion in which the elements of $a$ will not be modified after the iteration $t$.
+\item \Rd: The subregion in which the elements of $a$ are not modified in the loop.
+\end{itemize}
+\end{comment}
+
+%Figure~\ref{fig:four-nodes} shows those four definitions of $a$ in the VSG and the edges between them with the subregions.
+
+\Drawgraph {
+  \node [array, label=above:\AIn] (a0) at (4,3) {};
+  \node [array] (a1) [label=above:$\AInI$] at (0,3) {$\mu$};
+  \node [array] (a2) [label=below:$\AOutI$] at (0,0) {};
+  \node [array] (a3) [label=below:\AOut] at (4,0) {$\eta$};  
+    \path
+    (a0) edge  [pre and post]node  [lbl] {\Rd}  (a3)
+    %(a2) edge [bend right, pre] node  [lbl,swap] {\RaComp}  (a1)
+    (a2) edge [pre,forward,transform canvas={xshift=-.5mm}]   (a1) 
+    (a2) edge [post,reverse, transform canvas={xshift=.5mm}]   (a1)
+    %(a3) edge  [pre, reverse, transform canvas={yshift=.5mm}]   (a2)
+    %(a3) edge  [post, forward, transform canvas={yshift=-.5mm}] node  [lbl] {\Rc}   (a2)
+    %(a0) edge  [post, reverse,  transform canvas={yshift=-.5mm}] (a1)
+    %(a0) edge  [pre, forward,transform canvas={yshift=.5mm}] node  [lbl,swap] {\Ra}  (a1)
+    
+    %(a2) edge [pre and post]   (a1) 
+    (a3) edge  [pre and post] node  [lbl] {\Rc}   (a2)
+    (a0) edge  [pre and post] node  [lbl,swap] {\Ra}  (a1)
+    ;
+}{The relations between four definitions of an array in a loop. The dashed edge (reverse edge) implies the data dependence from an iteration to the next one. The dotted edge (forward edge) implies the data dependence from an iteration to the prior one. }{fig:four-nodes}
+
+
+\subsubsection{The search algorithm}
+
+Now we present  an algorithm of retrieving \AIn in the VSG as shown in Figure~\ref{fig:four-nodes}.
+We denote \SearchVal{\AIn}{\{i^t\}} as a search on the node \AIn for the index $i^t$, where $i\in\Iuse$.
+Also let \IterOutputSet be a set of all array definitions as the output of the iteration.
+We assume there is no nested loops, which we will discuss later.
+
+
+\begin{algorithm}
+\begin{enumerate}
+
+\item If $i^t\in \Rd$, $\AIn[i^t]$ can be retrieved through \EdgeWithSubregion{\AIn}{\Rd}{\AOut}.
+
+\item Else, if  $i^t\in \Ra$, the search continues  through the edge \EdgeWithSubregion{\AIn}{\Ra}{\AInI} and becomes \SearchVal{\AInI}{\{i^t\}}, which is the same as the search for loop-free programs (the loop body is treated as a loop-free program), until the following situations occur.
+
+
+\begin{enumerate}
+
+\item If the search reaches an array node $\IterOutput{b}$ with subregion $\mathcal{S}$, where $\IterOutput{b} \in \IterOutputSet$, then
+
+
+\begin{enumerate}
+
+\item If $\mathcal{S}\subseteq \Rc$, the search exits the loop through the edge \EdgeWithSubregion{\IterOutput{b}}{\Rc}{\LoopOutput{b}},  and becomes \SearchVal{\IterOutput{b}}{\mathcal{S}}.
+
+\item Else, the search continues through the edge \EdgeWithSubregion{\IterOutput{b}}{}{\IterInput{b}} and enters the next iteration (and hence $t$ is incremented by one) and becomes \SearchVal{\IterInput{b}}{\mathcal{S}}.
+
+\end{enumerate}
+
+\item If the search reaches a scalar value node \IterOutput{s}, which is an output of the iteration, then it continues through the edge \EdgeRight{\IterOutput{s}}{\IterInput{s}} and enters the next iteration. Note that the search will then apply the method proposed to reverse programs with loops for scalar values \cite{HouRC}.
+
+\item If the search reaches a value node defined outside of the loop, then it continues using the method for loop-free programs.
+
+\end{enumerate}
+
+\end{enumerate}
+
+\caption{The algorithm of  \SearchVal{\AIn}{\{i^t\}} }
+\label{algorithm:loop}
+\end{algorithm}
+
+For each $i\in \Iuse$, we do \SearchVal{\AIn}{\{i^t\}}.
+If it is successful, the retrieved subregion of \AIn is $\bigcup_{t\in[0,\iternum)}{\{i^t\}}$. 
+The final retrieved subregion is the union of each retrieved subregion for each index;
+the elements not in this subregion still need to be retrieved outside of the loop.
+If the search result does not contain reverse edges, the generated loop can have arbitrary iteration order (although we only consider the same and opposite order as the original loop).
+If the search reaches the next iteration in Step 2-(a)-ii as \SearchVal{\IterInput{b}^{t+1}}{\mathcal{S}}, and it is quite possible that $\mathcal{S}$ contains values defined in the iteration $t$.
+However, it is difficult to check the equality/inequality between two values  in two different iterations as required during the search.
+%In some cases, it is possible that 
+%The search should take care of it.
+%Because it is difficult to get the equality/inequality between the subregion in the iteration $t+1$ and $\mathcal{S}$, \SearchVal{\IterInput{b}^{t+1}}{\mathcal{S}} may not be successful.
+In Section~\ref{subsec:onlyuse}, we will propose a solution to this issue.
+
+Once \SearchVal{\AIn}{\{i^t\}} is successful, we also need to retrieve $i^t$, and the search result should obey the same iteration order as the generated loop.
+
+
+%Note that the precondition that the search enters the loop is  $i^t\in \Ra$. At compile time, there are possibly three results of it: true, false, or unknown. 
+%Only $i^t\in \Ra$ is true can the search continues.
+%Below we will see if $i$ is an induction variable, it is easier to check the membership.
+%Further, because we don't store any value defined in the loop, it is possible that \SearchVal{\AIn}{i^t} may fail $\forall i \in \Iuse$.
+%However, even a value could not be retrieved through the loop, it can always be retrieved outside the loop (at least we can use state saving). 
+
+
+\begin{comment}
+Using the similar method, we can also retrieve the output value of a loop from its input. 
+If during \SearchVal{\AIn}{i^t}, there is no edge from the output of the iteration to the input of the iteration selected, then we can choose an arbitrary order of $t$ in $[0,\iternum)$ on \SearchVal{\AIn}{i^t}. Otherwise, the order of $t$ must be ascending from 0 to $\iternum-1$. 
+\end{comment}
+
+%However, 
+
+
+
+\begin{comment}
+To retrieve \AIn from the loop, we developed two approaches, which are described below:
+
+
+Approach 1: We treat the loop body as another program, then try to retrieve $\AInI$ from $\AOutI$. 
+Because there is no state saving edge for each value defined in the loop, it is possible that a subregion of $\AInI$ can be retrieved from $\AOutI$.
+In the search result, 
+
+To retrieve all elements of an array from a loop, our strategy is retrieving its elements one by one.
+For an element $e$ of the array, roughly there are two ways to retrieve it:
+if $e$ is not modified in the loop, it should be able to be retrieved through the edge $\AIn\to \AOut$ in Figure~\ref{fig:four-nodes}; 
+%however, if at compile-time we cannot determine if $e\in R_{03}$
+if $e$ is modified in the loop, it will be retrieved from one or more iterations in the loop.
+If $e$ can be retrieved only from one iterations, in Figure~\ref{fig:four-nodes} the corresponding route will be $\AIn \to \AInI\to ... \to \AOutI\to \AOut$;
+else, the search result will contain a directed cycle.
+
+An array element can be retrieved through the loop body only if it is used in the loop. 
+Therefore, to retrieve elements of an array, we can try all indices for uses of the array from \AIn. 
+Given such an array index $i$, if it is a loop invariant, it it possible to retrieve only one element through $i$. 
+Retrieving it is using the same method to retrieve a scalar value from a loop.
+Here we consider the index as a loop variant. 
+
+Given such an index $i$, we use $i^t$ to represent its value in the iteration $t$. 
+To retrieve values in the region $\bigcup_{t=1...n}{\{i_t\}}$, we start a search from \AIn through the edge $\AIn \to \AInI$. 
+
+\end{comment}
+
+%\TODO{Multiple paths in loop body?}
+
+\subsubsection{Induction variables as indices}
+
+\newcommand{\IndVar}{\ensuremath{i}\xspace}
+\newcommand{\IndVarInput}{\ensuremath{i_{in}^t}\xspace}
+\newcommand{\IndVarOutput}{\ensuremath{i_{out}^t}\xspace}
+\newcommand{\IndVarInit}{\ensuremath{i_{init}}\xspace}
+\newcommand{\IndVarFinal}{\ensuremath{i_{final}}\xspace}
+\newcommand{\IndVarStep}{\ensuremath{s_i}\xspace}
+
+In the search algorithm above, checking the set membership between an index and a subregion is essential. 
+This is difficult for an arbitrary index and subregion, but if all indices in \Iuse and \Idef are induction variables, their properties can make it possible to accomplish the membership inspection  at compile time.
+
+An \emph{induction variable} \cite{Wolfe1992} is a variable whose value is systemically incremented or decremented by a constant value in a loop.
+Given an induction variable \IndVar with an initial value \IndVarInit and the step \IndVarStep.
+Let \IndVarInput and \IndVarOutput be the input and output value of the iteration $t$, then we have $\IndVarInput=\IndVarInit+\IndVarStep\times t$ and $\IndVarOutput=\IndVarInit+\IndVarStep\times (t+1)$ respectively.
+Also denote \IndVar's output value of the loop  by \IndVarFinal, and $\IndVarFinal=\IndVarInit+\IndVarStep\times\iternum$.
+Then we have $$\Span{\IndVarInput}=[\IndVarInit:\IndVarStep:\IndVarFinal-\IndVarStep]$$$$\Span{\IndVarOutput}=[\IndVarInit+\IndVarStep:\IndVarStep:\IndVarFinal]$$.
+
+This triplet representation not only makes it easier to represent the result of set operations like union on several such subregions, but also makes it possible to check the set membership at compile time.
+%
+For example, in the search algorithm we need to know if $i^t\in \Ra$. 
+If all indices in $\Idef$ are induction variables, then we have
+$$\Ra%=\overline{\Subr{0}{t}}=\overline{\bigcup_{j\in \Idef}{\bigcup_{r\in [0,t)}{\{j^r\}}}}
+=\overline{\bigcup_{j\in \Idef}{[j^0:s_j:j^{t-1}]}}=\overline{\bigcup_{j\in \Idef}{[j^0:s_j:j^t-s_j]}}$$
+
+Then $i^t\in \Ra \Leftrightarrow  i^t\notin[j^0:s_j:j^t-s_j], \forall j\in \Idef$.
+When $s_j=1$, we have $i^t\notin[j^0:j^t-s_j] \Leftrightarrow i^t < j^0 \vee i^t \ge j^t$, which could be resolved by checking the corresponding inequalities.
+GCD test and Banerjee test can also be used to check the membership. 
+Due to the space limit, we don't  discuss those methods here. 
+
+
+\subsection{The array being retrieved is not modified in the loop}
+\label{subsec:onlyuse}
+
+If the array is not modified in the loop, we can also retrieve it through the uses of its elements.
+Suppose the array to be retrieved is $a_0$, and it is used through the index $i$ which is a loop variant, then we search the value of $a_0[i]$ in each iteration. 
+The search algorithm is similar to Algorithm~\ref{algorithm:loop}.
+The difference is the search will directly enter the Step 2 without the membership inspection, and continue with the same three possible results 2-(a),2-(b), and 2-(c).
+%We start the search from the desired array node with each index $i_t$ which is a loop variant as the target subregion.
+%When the search reaches the output of the loop iteration, the searching rules remain the same as before.
+%except we don't have to inspect if the index belongs to the subregion $\Ra$, which does not exist any more.
+
+There is a special case that retrieving an array element requires the values of other elements in the same array. 
+In this case, the search coming from the array node may reach the array itself and form a cycle.
+For example, given a loop with loop condition $\texttt{while}(a_0[i]\texttt{==}a_0[j])$, in the VSG shown in Figure~\ref{fig:self-dependence}, retrieving $a_0[i^t]$ needs the value of $a_0[j^t]$, where $i$ and $j$ are both loop variants. 
+%In the iteration $t$ of the loop, in order to get the value of $a[i^t]$, the search follows the path $a_0\to a_0[i^t]\to a_0[j^t]\to a_0$ and returns back to $a_0$, when the search is not completed because the subregion $\{j^t\}$ is still required.
+%In the next iteration $t+1$, we get the similar result: retrieving $a[i^{t+1}]$ needs the value of $a[j^{t+1}]$. 
+If there is no other way to retrieve $a_0[j^t]$, the only way to get its value is through $a_0[i^s]$ if $i^s = j^t$, and $s\ne t$.
+If for every $j^t$ there is a $i^s$ such that $i^s = j^t$, and assume $s<t$, then the search for $a_0[i^t]$ will follow the path $a_0[i^t]\to a_0[j^t]\to a_0[i^s]\to a_0[j^s]\to a_0[i^r]\to a_0[j^r]  \to ..., (t>s>r)$ until the iteration number becomes less that 0. 
+Note that the last value in this path should still be recovered in other ways.
+%Therefore, we can retrieve $a[i^t]$ from $a[i^t]\to a[j^t]\to a[i^{t+n_1}]\to a[j^{t+n_1}]\to ...$ until $t+n_i$ exceeds \iternum, in which case we have to retrieve $a[j^{t+n_{i-1}}]$ in other ways.
+This strategy works well when $i$ and $j$ are induction variables with the same step, and can also be applied in Algorithm~\ref{algorithm:loop} at Step (a)-ii (note that  $\mathcal{S}$ is calculated when searching for one element, so that $|\mathcal{S}|\le1$, and usually $\mathcal{S}$ only contains an index).
+
+
+\begin{comment}
+%Depends on the retrieving order of the $t$, $a[j^t]$'s value could already have been retrieved through $a[i^s]$. 
+Here we consider the situation that $i$ and $j$ are both induction variables, represented by $i_0+s_i\times t$ and $j_0+s_j\times t$,
+where $i_0<j_0$, with final values $i_1$ and $j_1$.
+Then those $j$s which can be retrieved from $i$ is the one satisfying the following equation:
+$$i_0+s_i\times t_1=j_0+s_j\times t_2, \mbox{where } t_1 > t_2, t_1,t_2 \in [0,\iternum)$$
+%$$as+b=ct+d, \mbox{where } s < t \mbox{ or } s > t, s,t \in [0:N-1]$$
+From above we can get $t_2=(s_i/s_j)t_1+(i_0-j_0)/s_j$.
+If $s_i=s_j$ and $(i_0-j_0)\mbox{ mod }s_j=0$, then the subregion $[j_0:s_j:i_1]$ represented by $j$ can be retrieved from $a[i]$.
+Since the subregion represented by $j$ is $[j_0:s_j:j_1]$, we have to retrieve the subregion $[j_0:s_j:j_1] - [j_0:s_j:i_1]= [i_1+s_j:s_j:j_1]$ in other ways.
+
+\end{comment}
+
+\Drawgraph {
+  \node [array, label=below:{$a_0$}] (a0) at (0,0) {};
+  \node [scalar] (a0i) [label=above:{$a_0[i]$}] at (4,1) {};
+  \node [scalar] (a0j) [label=below:{$a_0[j]$}] at (4,-1) {};
+    \path
+    (a0) edge [pre and post] node  [lbl] {$\{i^t\}$}  (a0i)
+    (a0) edge  [pre and post]node  [lbl,swap] {$\{j^t\}$}  (a0j)
+    (a0i) edge  [pre and post](a0j);
+}{The VSG of a loop with loop condition $\texttt{while}(a_0[i]\texttt{==}a_0[j])$.}{fig:self-dependence}
+
+
+
+\subsection{A case study}
+\label{sec:case-study}
+
+
+
+\begin{figure*}
+\centering
+
+\begin{subfigure}{\textwidth}
+\centering
+\Drawgraph {
+   \node [array, label=above:$a_0$] (a0) at (14, 3) {};
+  \node [array] (a1) [label=above:$a_1$] at (9.5, 3) {$\mu$};
+  \node [array] (a2) [label=below:$a_2$] at (9.5,0) {};
+  \node [array, available] (a3) [label=below:$a_3$] at (14,0) {$\eta$};
+  \node [scalar] (a1i1) [label=above:{$a_1[i_1]$}] at (6,3) {};
+  \node [scalar] (a2i1) [label=below:{$a_2[i_1]$}] at (6,0) {};
+  \node [scalar] (t) [label=above:{$t_0$}] at (4,3) {};
+  \node [scalar, available] (delta0) [label=below:{$delta_0$}] at (-0.7,0) {0};
+  \node [scalar] (delta1) [label=below:{$delta_1$}] at (2,0) {$\mu$};
+  \node [scalar] (delta2) [label=above:{$delta_2$}] at (2,3) {};
+  \node [scalar] (delta3) [label=above:{$delta_3$}] at (-0.7,3) {$\eta$};
+  \node [op] (p) at (5,1.5) {$+$};
+  \node [op] (m) at (7,1.5) {$-$};
+  \node [op] (m2) at (3,1.5) {$-$};
+  %[post, forward, transform canvas={yshift=-.5mm}] node  [lbl] 
+    \path
+   (a0) edge  [pre and post] node [lbl,swap]  {$\overline{[i_0:i^{t}_1-1]} $}  (a1)
+    (a1) edge [pre, reverse, transform canvas={xshift=.5mm}] (a2)
+    (a1) edge [post, forward, transform canvas={xshift=-.5mm}]  (a2)
+    (a1) edge [pre and post, bend left=20] node [lbl]  {$\overline{\{i^t_1\}} $} (a2)
+    (a2) edge [pre and post] node [lbl,swap]  {$\overline{[i^{t}_1+1:i_3-1]} $} (a3)
+    (a1) edge [pre and post]  node [lbl,swap]  {$\{i^t_1\} $} (a1i1)
+    (a2) edge  [pre and post]node [lbl]  {$\{i^t_1\} $} (a2i1)
+    (a1i1) edge  [pre and post](t)
+    (t) edge [post] (p)
+    (t) edge [pre] (m)
+    (a2i1) edge [pre] (p)
+    (a2i1) edge [post] (m)
+    (delta1) edge [post] (m2)
+    (m2) edge [post] (t)
+    (m2) edge [post] (a2i1)
+    (a0) edge [pre and post] node [lbl]  {$\overline{[i_0,i_3-1]} $} (a3)
+    (delta0) edge [pre and post] (delta1)
+    (delta1) edge [post, forward, transform canvas={xshift=-.5mm}] (delta2)
+    (delta1) edge [pre, reverse, transform canvas={xshift=.5mm}] (delta2)
+    (delta2) edge  [pre and post](delta3)
+    (delta2) edge [pre and post] (t)
+    (delta1) edge [pre] (p)
+    (delta1) edge [pre] (m);
+
+}{The VSG.}{fig:delta-encoding-vsg}
+\end{subfigure}%
+\\
+\begin{subfigure}{\textwidth}
+\centering
+\Drawgraph {
+   \node [array, label=above:$a_0$] (a0) at (14, 3) {};
+  \node [array] (a1) [label=above:$a_1$] at (9.5, 3) {$\mu$};
+  \node [array] (a2) [label=below:$a_2$] at (9.5,0) {};
+  \node [array, available] (a3) [label=below:$a_3$] at (14,0) {$\eta$};
+  \node [scalar] (a1i1) [label=above:{$a_1[i_1]$}] at (6,3) {};
+  \node [scalar] (a2i1) [label=below:{$a_2[i_1]$}] at (6,0) {};
+  \node [scalar] (t) [label=above:{$t_0$}] at (4,3) {};
+  \node [scalar, available] (delta0) [label=below:{$delta_0$}] at (-0.7,0) {0};
+  \node [scalar] (delta1) [label=below:{$delta_1$}] at (2,0) {$\mu$};
+  \node [scalar] (delta2) [label=above:{$delta_2$}] at (2,3) {};
+  %\node [scalar] (delta3) [label=below:{$delta_3$}] at (-1,4) {$\eta$};
+  \node [op] (p) at (5,1.5) {$+$};
+  
+    \path
+   (a0) edge [post] node [lbl, swap]  {$\bigcup{\{i_1^t\}}$} (a1)
+    (a2) edge [post]  node [lbl,swap]  {$\bigcup{\{i_1^t\}}$} (a3)
+    (a1) edge [post,very thick] node [lbl,swap]  {$\{i^t_1\} $} (a1i1)
+    (a2) edge [pre,very thick] node [lbl]  {$\{i^t_1\} $} (a2i1)
+    (a1i1) edge [post,very thick] (t)
+    (t) edge [post,very thick] (p)
+    (a2i1) edge [pre,very thick] (p)
+    (delta0) edge [pre] (delta1)
+    (delta1) edge [post, forward](delta2)
+    (delta2) edge [post,very thick] (t)
+    (delta1) edge [pre,very thick] (p);
+
+}{The RG for the first search result.}{fig:delta-encoding-rg}
+\end{subfigure}%
+\\
+\begin{subfigure}{\textwidth}
+\centering
+\Drawgraph {
+   \node [array, label=above:$a_0$] (a0) at (14, 3) {};
+  \node [array] (a1) [label=above:$a_1$] at (9.5, 3) {$\mu$};
+  \node [array] (a2) [label=below:$a_2$] at (9.5,0) {};
+  \node [array, available] (a3) [label=below:$a_3$] at (14,0) {$\eta$};
+  \node [scalar] (a1i1) [label=above:{$a_1[i_1]$}] at (6,3) {};
+  \node [scalar] (a2i1) [label=below:{$a_2[i_1]$}] at (6,0) {};
+  \node [scalar] (t) [label=above:{$t_0$}] at (4,3) {};
+ % \node [scalar, available] (delta0) [label=below:{$delta_0$}] at (-0.7,0) {0};
+  \node [scalar] (delta1) [label=below:{$delta_1$}] at (2,0) {$\mu$};
+  \node [scalar] (delta2) [label=above:{$delta_2$}] at (2,3) {};
+  \node [scalar] (delta3) [label=below:{$delta_3$}] at (-0.7,3) {$\eta$};
+  \node [op] (m2) at (3,1.5) {$-$};
+  
+    \path
+   (a0) edge [post] node [lbl, swap]  {$\bigcup{\{i_1^t\}}$} (a1)
+    (a2) edge [post]  node [lbl,swap]  {$\bigcup{\{i_1^t\}}$} (a3)
+    (a1) edge [post,very thick] node [lbl,swap]  {$\{i^t_1\} $} (a1i1)
+    (a2) edge [pre,very thick] node [lbl]  {$\{i^t_1\} $} (a2i1)
+    (a1i1) edge [post,very thick] (t)
+    (t) edge [pre,very thick] (m2)
+    (a2i1) edge [pre,very thick] (m2)
+    (delta3) edge [pre] (delta2)
+    (delta1) edge [pre, reverse](delta2)
+    (delta2) edge [pre,very thick] (t)
+    (delta1) edge [post,very thick] (m2);
+
+}{The RG for the second search result.}{fig:delta-encoding-rg}
+\end{subfigure}
+~
+\begin{subfigure}{\textwidth}
+\centering
+\Drawgraph {
+  \node [scalar, available] (i0) [label=below:{$i_0$}] at (-.7,0) {0};
+  \node [scalar] (i1) [label=below:{$i_1$}] at (2,0) {$\mu$};
+  \node [scalar] (i2) [label=above:{$i_2$}] at (2,3) {};
+  \node [scalar, available] (i3) [label=above:{$i_3$}] at (-.7,3) {$N$};
+  \node [op] (p) at (3,1.5) {$++$};
+  \node [op] (m) at (1,1.5) {$--$};
+    \path
+    (i0) edge [pre and post] (i1)
+    (i1) edge [post, forward, transform canvas={xshift=-.5mm}](i2)
+    (i1) edge [pre, reverse, transform canvas={xshift=.5mm}](i2)
+    (i2) edge [pre and post] (i3)
+    (i2) edge [post] (p)
+    (i1) edge [pre] (p)
+    (i2) edge [pre] (m)
+    (i1) edge [post] (m)
+    ;
+}{The VSG of $i$.}{fig:delta-encoding-rg}
+\end{subfigure}%
+~
+\begin{subfigure}{\textwidth}
+\centering
+\Drawgraph {
+  \node [scalar, available] (i0) [label=below:{$i_0$}] at (-.7,0) {0};
+  \node [scalar] (i1) [label=below:{$i_1$}] at (2,0) {$\mu$};
+  \node [scalar] (i2) [label=above:{$i_2$}] at (2,3) {};
+  \node [op] (p) at (3,1.5) {$++$};
+    \path
+    (i0) edge [pre] (i1)
+    (i1) edge [post, forward] (i2)
+    (i2) edge [post, very thick] (p)
+    (i1) edge [pre, very thick] (p)
+    ;
+}{The RG of $i$ for the first search result.}{fig:delta-encoding-rg}
+\end{subfigure}%
+~
+\begin{subfigure}[b]{0.15\textwidth}
+\Drawgraph {
+  \node [scalar] (i1) [label=below:{$i_1$}] at (2,0) {$\mu$};
+  \node [scalar] (i2) [label=above:{$i_2$}] at (2,3) {};
+  \node [scalar, available] (i3) [label=above:{$i_3$}] at (-.7,3) {$N$};
+  \node [op] (m) at (1,1.5) {$--$};
+    \path
+    (i3) edge [pre] (i2)
+    (i1) edge [pre, reverse] (i2)
+    (i2) edge [pre, very thick] (m)
+    (i1) edge [post, very thick] (m)
+    ;
+}{The RG  of $i$ for the second search result.}{fig:delta-encoding-rg}
+\end{subfigure}
+\caption{The VSGs and RGs.}
+\label{fig:deltaencoding}
+\end{figure*}
+
+
+
+
+As an example, let's  look at how to reverse a delta encoding program, which is shown below together with its SSA form.
+The VSG is built and shown in Figure~\ref{fig:deltaencoding}(a)\&(d).
+There are three available value nodes: $a_3$, which is the output of the program;  $delta_0$, which is a constant value; and $i_3$, whose value  $N$ is calculated by solving constraints~\cite{HouRC}. Their corresponding value nodes are shown in bold in the VSG.
+Our goal is searching the VSG for $a_0$.
+
+
+\small
+\Code{
+& /*\; Input: a\;*/\\
+%& int \; a[N]; \\
+& int \; delta := 0; \\
+& int \; i := 0; \\
+& do\; \{ \\
+& \;\;\;\; int \; t := a[i]; \\
+& \;\;\;\; a[i]:=t - delta; \\
+& \;\;\;\; delta := t; \\
+&\;\;\;\; i:=i+1; \\
+& \}\;while(i < N); \\
+& /*\; Output: a\;*/\\
+}
+{
+& /*\; Input: a_0\;*/\\
+& int \; delta_0 := 0,\;i_0 := 0; \\
+& do \;\{ \\
+& \;\;\;\; i_1:=\mu(i_0, i_3); \; a_1 := \mu (a_0, a_2); \\
+& \;\;\;\; delta_1:=\mu(delta_0, delta_2); \\
+& \;\;\;\; int \; t_0 := a_1[i_1]; \\
+& \;\;\;\; a_2[i_1]:=t_0- delta_1; \\
+& \;\;\;\; [a_2, \overline{\{i_1\}}]:=\delta([a_1, \overline{\{i_1\}}]); \\
+%&\;\;\;\; [a_3, \{ i_1 \}] = \delta (a_1, [a_2,  \{ i_1 \}]) \\
+& \;\;\;\; delta_2 := t_0; \\
+&\;\;\;\; i_2:=i_1+1; \\
+& \}\;while \; (i_2 < N);  \\
+& i_3 := \eta (i_2); \; a_3 := \eta (a_2); \\
+& delta_3 := \eta (delta_2); \\
+& /*\; Output: a_3\;*/\\
+}
+\normalsize
+
+
+There is only one use of the element of $a_1$ in the loop through the index $i_1$. 
+Therefore, we inquire the value of $a_1[i_1]$ for all iterations.
+At the iteration $t$, from the subregion on the edge \Edge{a_0}{a_1} as shown in Figure~\ref{fig:deltaencoding}(a), we have $(a_0\equiv a_1)@\overline{[i_0:i^t_1-1]}$.
+Because $i_1^t > i^t_1-1$, and hence $i_1^t\notin \overline{[i_0:i^t_1-1]}$, then we have $a_0[i_1^t]= a_1[i_1^t]$.
+On the VSG, we can get $a_1[i_1^t]$ through $t_0$ from $a_2[i_1^t]+delta_1^t$, and then the search forks to two directions:
+one begins with $a_2[i_1^t]$ and one begins with $delta_1^t$.
+
+
+
+
+
+The search for $a_2[i_1]$ then passes through the edge $a_2[i_1^t]\to a_2$ and reaches an output of the iteration $a_2$. 
+According to the searching rule, we inspect if $a_2[i_1^t]=a_3[i_1^t]$ by checking if $i_1^t$ belongs to the subregion on the edge $a_2\to a_3$ which is $\overline{[i_1^t+1:i_3-1]}$. 
+Because $i_1^t<i_1^t+1$, the answer is true.
+The search then exits the loop  and ends successfully at the available node $a_3$.
+
+The search for $delta_1$ follows the searching rule in \cite{HouRC}.
+%Basically, the search can only exit the loop through the edge $delta_2\to delta_3$  if the reverse edge $delta_2\to delta_1$ is selected. 
+%Similarly,  the search can only exit through the edge $delta_1\to delta_0$  if the forward edge $delta_1\to delta_2$ is selected. 
+%Because the search reaches $delta_1$ from $t_0$, it cannot go back to $t_0$ through the minus operation which forms an illegal cycle. 
+%The only choice is taking the forward edge $delta_1\to delta_2$ and go back to $t_0$,  forming a legal cycle  because it contains a forward edge.
+%Also because the forward edge is already taken, the edge $delta_1\to delta_0$ should also be selected to let the search exit the loop.
+%
+Figure~\ref{fig:deltaencoding}(b) shows one search result. 
+As the value of $i_1$ is required as the index of $a_1$ and $a_2$, we start another search for it.
+Note that previously a forward edge $delta_1 \to delta_2$ is already selected, forcing the generated loop to have the same iteration order as the original loop. 
+Therefore, during the search for $i_1$ the reverse edge $i_2\to i_1$ cannot be selected.
+The search result of $i_1$ is shown in Figure~\ref{fig:deltaencoding}(e).
+In the reverse program we build the loop body from the bold edges in  Figure~\ref{fig:deltaencoding}(b)\&(e).
+%Please refer to \cite{HouRC} for the reason and more details.
+The loop condition of the generated loop is built as the same  one  in the original loop.
+The synthesized reverse program is shown below on the left.
+Since there is no state saving used, the forward program is identical to the original one.
+
+Figure~\ref{fig:deltaencoding}(c)\&(f) show another search result that contains reverse edges.
+However, since the value $delta_3$ is unknown, it needs to be stored in the forward program (there should be an edge connecting $delta_3$ to the state saving node, which is omitted here).
+The resulted reverse program is shown below on the right.
+We prefer the first result because there is no state saving used.
+%
+%
+\small
+\begin{multicols}{2}  
+%
+ \begin{flalign*} 
+ & int \; delta:=0;\\
+ & int \; i:=0;\\
+& do\;\{\\
+& \;\;\;\;int \; t:=a[i]+delta;\\
+& \;\;\;\;a[i] := t;\\
+& \;\;\;\;delta:=t;\\
+& \;\;\;\;i:=i+1;\\
+& \}\;while(i<N);\\
+\end{flalign*} 
+
+ \begin{flalign*} 
+ & int \; delta;\\
+ & restore(delta); \\
+ & int \; i:=N;\\
+& do\;\{\\
+& \;\;\;\;i:=i-1;\\
+& \;\;\;\;int \; t:=delta;\\
+& \;\;\;\;delta:=t-a[i];\\
+& \;\;\;\;a[i] := t;\\
+& \}\;while(i\ne 0);\\
+\end{flalign*} 
+
+\end{multicols}
+\normalsize
+
+\begin{comment}
+
+Assume at runtime the number of iterations of the loop is $n$.
+Let $t$ be the loop index in the original loop, where $t\in [1:n]$.
+For every value defined in the loop, we add $t$ to it as a superscript to show that value in the iteration $t$.
+
+We acquire each element of $a_0$ from $a_1$ using the index $i_1^t$.
+Assume during the loop, the subregion $R$ of the array $a$ is modified.
+We add a summary edge between $a_0$ and $a_3$ with subregion $\overline{R}$ in which elements of $a$ stay unchanged.
+
+
+
+In general, for an array updated in a loop, between the output of the iteration $t$ and the output of the loop for the array (in our example, $a_3$ and $a_4$ respectively), we add a subregion showing in which part of the array they have the same elements.
+Let $I$ include all indices at which the array is modified in the loop (in our example, $I=\{i_1,j_2\}$).
+Then at the end of the iteration $t$, the subregion of the array that will be modified during the following iterations is $R(t,n) = \bigcup_{i\in I}{\bigcup_{t\le r\le n}{\{i^r\}}}$.
+Then $R=R(0)$.
+At the beginning of the iterations $t$, the subregion on with $a_0$ and $a_1$ have the same elements is $R(0,t-1)$.
+
+\end{comment}
+
+%\subsection{The array being retrieved is not modified in the loop}
+
+\subsection{Handling nested loops}
+Handling nested loops is similar to handling a single loop.
+Assume there is an outer loop $l_{out}$ and an inner loop $l_{in}$.
+Given an index $i$ of the array $a$ in the inner loop, let $i^{s,t}$ be the value of $i$ in the iteration $s$ of $l_{out}$ and the iteration $t$ of $l_{in}$.
+Then from the view of $l_{out}$, in the iteration $s$ we try to retrieve the subregion $\bigcup_{t\in[0,l_{in}.len)}{\{i^{s,t}\}}$ of $a$.
+If we can retrieve such a subregion for every $s\in S$, the final subregion of $a$ retrieved is $\bigcup_{s\in S}\bigcup_{t\in[0,l_{in}.len)}{\{i^{s,t}\}}$.
+

@@ -1,0 +1,539 @@
+\newcommand{\arraylen}{\ensuremath{a.length}\xspace}
+\newcommand{\EquivRange}[3]{\ensuremath{(#1\equiv#2)@#3}\xspace}
+
+We first consider how to extend the VSG and RG machinery to handle arrays in loop-free programs.
+(We treat loops in Section~\ref{sec:array-loops}.)
+%, and propose a method to deal with more challenging programs with loops in the next section.
+%In this section, we first introduce the Array SSA, then describe how we make use of it and build array nodes and edges in the VSG. 
+%Then we still divide the programs with arrays into two categories: programs without and with loops. 
+%In this chapter we will use an Array SSA proposed in [] in which concrete array regions are employed.
+%Based on this Array SSA, we could build the VSG with special array nodes inside.
+%By modifying the searching rules on the VSG, we will see that we could handle programs with arrays using the same framework as before. 
+The key idea behind our method is explicit representation of array subregions (subsets of array elements) combined with a modified form of Array SSA~\cite{rus2006scalable}.
+
+\subsection{Array subregion representations and operations}
+
+%Unless explicitly indicated, when we retrieve an array, we are retrieving all elements of it. 
+Given an array $a$ with length \arraylen, all elements can be represented by their indices as an interval $[0,\arraylen)$.
+We denote this index set, $[0,\arraylen)$, as the \emph{universal set}, $\mathcal{U}(a)$.
+A (strict) subregion of $a$ is a (strict) integer subset of the universal set.
+
+Among all possible subregions of an array, notable cases we will consider include:
+%
+\begin{itemize}
+\item The subregion containing a single index $i$, denoted $\{i\}$, where $i$ is a constant or an SSA name.
+%\footnote{Note that an SSA name normally has a version. But for clarity we ignore this version when it is unnecessary to show it.}. 
+\item The set of all indices other than $i$, or $\overline{\{i\}} = \mathcal{U}(a)-\{i\}$.
+
+\item The triplet $[p:s:q]$ is the set of all indices starting from $p$ up to (and possibly including) $q$ with stride $s$. We use the shorthand $[p:q]$ when $s=1$.
+\end{itemize}
+
+We need index set operations so that our analysis algorithm can conclude whether or not we have restored all elements of the array on all paths.
+However, our analysis, being symbolic at compile-time, will also need to be conservative.
+%All set operations can be performed on array subregions. Actually, later during the search we will use those operations on array subregions and inspect the results to guarantee that all array elements in a specific subregion are retrieved. 
+%However, because of symbols in subregions, we could not get the result of every set operation if some necessary informations are missing.
+For example, given an intersection $\{i\} \cap \{j\}$, the result of it could be  $\{i\}$ or $\emptyset$, depending on whether $i=j$ or $i\ne j$, which may be indeterminate at compile-time.
+As such, key operations we will use are:
+%, which, however, possibly could not be determined at compile time.
+%From the operations and the results shown below, we can conclude that checking the equality and inequality between two symbols at compile time is essential to get the results.
+
+$$
+\{i\}\cap {\{j\}} = \left\{ \begin{array}{ccl}  \{i\} & \mbox{if }  i = j \\ \emptyset & \mbox{if }  i \ne j  \end{array}\right.
+$$
+$$
+\{i\}\cap \overline{\{j\}} = \left\{ \begin{array}{cc}  \{i\} & \mbox{if }  i \ne j \\ \emptyset & \mbox{if }  i = j \end{array}\right. 
+$$
+$$
+\{i\}\cup {\{j\}} = \left\{ \begin{array}{cc}  \{i\} & \mbox{if } i = j \\ \{i\}\cup {\{j\}}  & \mbox{if }  i \ne j \end{array}\right. 
+$$
+$$
+\{i\}\cup \overline{\{j\}} = \left\{ \begin{array}{cc}  \mathcal{U} & \mbox{if } i = j \\ \overline{\{j\}} & \mbox{if }  i \ne j \end{array}\right.
+$$
+$$
+\{i\}\cap [p:q] = \left\{ \begin{array}{cc}  [p:q] & \mbox{if } i \ge p \mbox{ and } i\le q \\ {\emptyset} & \mbox{if } i < p \mbox{ or } i> q \end{array}\right.
+$$
+
+%But at compile time if we can determine if $i=j$  or $i\ne j$, we cat get the result of this intersection as $\{i\}$ or $\emptyset$.
+%Or else, we will leave the operation there. 
+%In order to build a more accurate RG, we need to simplify an expression with set operations.
+
+Because the VSG reveals equalities between values, we can use it to check if $i=j$ by starting a path search from $i$ to $j$. 
+To check inequality, we can use the previously proposed \emph{inequality graph} ~\cite{ABCD}.
+In this representation, each node is a constant or an SSA name;
+each directed edge $x \xrightarrow{c} y$ represents $x-y\le c$. 
+The inequalities are obtained from, for instance, branch predicates like $\texttt{if}(x>y)$ and assignments like $x = y + c$, where $c$ is a constant. 
+From the inequality graph, checking whether $x \ne y$ is equal to checking if $x-y\le -1$ or $y-x\le -1$.
+%Note in our application we don't care if $a>b$ or $a<b$.
+%Therefore, we can make use of more informations like the predicate $if(a\ne b)$ and $if(a=b)$ (where $a\ne b$ in the false body).
+
+As our analysis manipulates and simplifies set operations, we may need to normalize the operations according to the set operation laws, including identity laws, domination laws, idempotentency, commutativity, associativity, distributivity, among others.
+%In addition, since an array subregion may contain SSA names. 
+%The knowledge of the relations between them can also help to simplify an set expression.
+%For example, $\{i\} \cup \{j\} = \{i\} =\{j\}$ if $i=j$, and $\{i\} \cap \{j\} = \emptyset$ if $i\ne j$.
+%For example, $\{i\} \cup \overline{\{i\}} = [0,N)=U$. 
+
+%For induction variables in a loop (assume it has depth one), we use two regions for arrays indexed by an induction variable: one for the local iteration, and one for a summary for the scope outside of the loop. 
+
+%\TODO{Show why we need to simplify those set operations.}
+
+\subsection{Modified $\delta$ function in Array SSA}
+\label{modified-ssa}
+
+
+In scalar SSA, the entire array receives a new version number even when just a single element is modified, i.e., even assigning one element effectively kills all preceding array definitions.
+To better support array-based programs, we adapt Array SSA~\cite{rus2006scalable}.
+In Array SSA, defining an array element only kills the previous definition of that element instead of the whole array. 
+Therefore, it more accurately represent the use-def relations between array subregions. 
+
+%We will build the VSG for arrays based on Array SSA.
+%To make it easier to build a VSG, we make some modifications on the original Array SSA. 
+%Let's see first how we build arrays nodes for a $\delta$ function.
+Our modified form of Array SSA is simple:
+after an array element is modified, we (a) assign a new version to the corresponding array, and also (b) define a $\delta$ function (as in Array SSA) to maintain equality relations between the unmodified array subregions in the new array and the previous array.
+Because we only care equality relations instead of def-use, our modified Array SSA has fewer SSA names and simpler $\delta$ functions compared to the original one.
+%, and they create two names of the same array. 
+%The only use of the first name is as an argument of the $\delta$ function. 
+%Therefore, we can combine those two names into one.
+%, and connect this array node to other array nodes and the definition of its element. 
+For example, consider the following program.
+%
+\small
+\begin{flalign*} 
+& int \; a[N]; \\
+& a[i] := 0;\\
+& a[j] := a[j] + 1;\\
+\end{flalign*} 
+\normalsize
+%
+The program in our modified array SSA is shown below:
+\small
+\begin{flalign*} 
+& int \; a_0[N]; \\
+& a_1[i] := 0;\\
+& [a_1, \overline{\{i\}}] := \delta ([a_0, \overline{\{i\}}]);  \\
+& a_2[j] := a_1[j] + 1;\\
+& [a_2, \overline{\{j\}}] := \delta ([a_1, \overline{\{j\}}]); 
+\end{flalign*} 
+\normalsize
+%
+Note that when $a[i]$ is modified, we give the array $a$ a new version $1$ as in original SSA, and just after this definition, we create a $\delta$ function $[a_1, \overline{\{i\}}] := \delta ([a_0, \overline{\{i\}}])$ that defines the subregion $\overline{\{i\}}$ of $a_1$ by the same subregion of $a_0$.
+From this $\delta$ function, we know $a_0$ and $a_1$ have identical elements in the subregion $\overline{\{i\}}$.
+We use the notation \EquivRange{a_0}{a_1}{\overline{\{i\}}} to represent such a relationship;
+thus, in this example, we also have \EquivRange{a_1}{a_2}{\overline{\{j\}}} from the other $\delta$ function, $[a_2, \overline{\{j\}}] := \delta ([a_1, \overline{\{j\}}])$.
+
+In addition, the $\phi$ functions that appear in SSA, when defined for arrays with several array definitions from different control flow paths as the arguments, have the same meaning as those for scalars.
+That is, for a $\phi$ function $a_1 := \phi(a_2, a_3)$, we have \EquivRange{a_1}{a_2}{\mathcal{U}(a)} and \EquivRange{a_1}{a_3}{\mathcal{U}(a)} with different control flow path sets as conditions.
+
+
+\subsection{Arrays in the VSG}
+
+Since an array is a collection of values, we would like the VSG to be able to express equalities between individual values where needed.
+Here, we describe a technique for doing so.
+ 
+Let $a_u$ be version $u$ of an array definition.
+We augment the VSG with an \emph{array node} to represent it, and refer to this array node by $a_u$ directly.
+%To represent an array definition,  e.g. $a_u$,  we create a special node in the VSG that we call an \emph{array node}. 
+%We will refer to this array node by $a_u$ directly.
+Any element $a_u[i]$ is a scalar value
+%\footnote{We don't consider arrays of multi-dimensions.}
+and may still have a scalar value node in the VSG.
+%Remember that every edge in a VSG is attached with the path information.
+A $\delta$ relation, $[a_u, \overline{\{i\}}]=\delta ([a_v, \overline{\{i\}}])$, expresses the equalities $a_u[j]=a_v[j], \forall j\in \overline{\{i\}}$.
+To represent this relation, we add an \emph{array edge} in the VSG between the array nodes $a_u$ and $a_v$, and attach the subregion $\overline{\{i\}}$ to this array edge.
+For each array access $a_u[i]$ in the program, we add a relation between this element and the array $a_u$ by adding an edge connecting the corresponding two nodes in the VSG.
+We call this edge as an \emph{array access edge}.
+Similarly, we attach the subregion $\{i\}$ to this edge.
+As before, every edge in the VSG is also attached with a control flow path set, including array and array access edges.
+%Except the path set, we also attach a region set to each array edge and array access edge.
+%Each array edge connects two array nodes, or an array node and a value node representing an access of that array.
+%For an array edge between two array nodes $a_x$ and $a_y$, an array region $R$ is attached to it, showing that for each index $i \in R, a_x[i]=a_y[i]$.
+%$a_x$ and $a_y$ have the same values for all elements in the region $R$.
+%For an array access edge connecting an array node $a_x$ with an access of it $a_x[i]$, we add a region $\{i\}$ on this edge.
+
+
+Figure~\ref{fig:array-simple-vsg} shows the VSG built for the above array example above.
+%program in \TODO{Section~\ref{modified-sea}}.
+Each array node is a square, to differentiate from circular nodes for scalars. 
+Since there is only one control flow path in this program, the path information on each VSG edge is not shown here.
+%For each element access of an array $a_x[i]$, the corresponding value node will be connected to the array node for $a_x$ with region $\{i\}$.
+%The region informations are attached to edges incident to array nodes.
+
+\Drawgraph{
+    \node [array, label=above:$a_0$] (a0) at (0,0) {};
+    \node [scalar, label=below:${a_1[i]}$] (a1i) at (0,-3) {0};
+    %\node [scalar, label=below:${a_0[j]}$] (a0j) at (-3,-3) {};
+    \node [array, label=above:$a_1$] (a1) at (3,0) {};
+    \node [scalar, label=below:${a_1[j]}$] (a1j) at (3,-3) {};
+    \node [array, label=above:$a_2$] (a2) at (6,0) {};
+    \node [scalar, label=below:${a_2[j]}$] (a2j) at (6,-3) {};
+    \node[op] (p) at (4.5,-2) {$++$};
+    \node[op] (m) at (4.5,-4) {$--$};
+    \path
+    (a1) edge [post] node  [lbl, swap] {${\{i\}}$} (a1i)
+    (a1) edge [pre and post] node  [lbl, swap] {$\overline{\{i\}}$} (a0)
+    (a1) edge [pre and post] node  [lbl] {${\{j\}}$} (a1j)
+    (a2) edge [pre and post] node  [lbl, swap] {$\overline{\{j\}}$} (a1)
+    (a2) edge [pre and post] node  [lbl] {${\{j\}}$} (a2j)
+    (a2j) edge [post] (p)
+    (p) edge [post] (a1j)
+    (a1j) edge [post] (m)
+    (m) edge [post] (a2j)
+    ;
+}{The VSG.}{fig:array-simple-vsg}
+
+
+For each $\phi$ function defined for arrays, in the VSG we build a $\phi$ array node and connect it to all of its arguments. 
+Again, we attach a control flow path set and the full array region to the edge.
+
+
+\subsection{State saving on an array and its elements}
+
+Recall that in the forward program we may choose to save state;
+to enable this possibility, we create a state saving node in the VSG and connect all value nodes to it.
+%Recall that to guarantee that each desired value can be retrieved in the reverse program, some values may be stored in the forward program and restored in the reverse program, assuming there are no better ways to retrieve them.
+%We call this technique as state saving.
+%To generate state saving statements in forward program, a state saving node is created in the VSG and connected to all value nodes.
+During the search, selecting such a state saving edge generates a state saving statement in the forward program.
+If we wish to regard state saving as expensive, we can attaching costs to all edges and penalize state saving by assigning higher weights to state saving edges.
+%use a cost model for the VSG, in which  state saving edges have larger costs than other edges. 
+It is possible to formulate the search algorithm to account for such costs~\cite{Hou2012}.
+
+
+For each array node $a_u$ in the VSG, we also connect it to the state saving node using an edge that we call  a\emph{ state saving array edge}. 
+The subregion on this edge is the full region $\mathcal{U}(a)$. 
+For example, Figure~\ref{fig:array-ss-vsg} shows the VSG with a new added state saving node and three state saving array edges for the VSG shown in Figure~\ref{fig:array-simple-vsg}.
+During the search, the subregion on a state saving array edge will be updated, and the cost of this edge is calculated based on the size of the updated subregion. 
+Assume the cost of storing an array element is $c$, and the size of the subregion on the state saving edge in the search result is $s$, then the cost of this edge is $s\times c$.  
+
+\Drawgraph{
+\node [array, label=above:$a_0$] (a0) at (0,0) {};
+    \node [scalar, label=below:${a_1[i]}$] (a1i) at (0,-3) {0};
+    %\node [scalar, label=below:${a_0[j]}$] (a0j) at (-3,-3) {};
+    \node [array, label=above:$a_1$] (a1) at (3,0) {};
+    \node [scalar, label=below left:${a_1[j]}$] (a1j) at (3,-3) {};
+    \node [array, label=above:$a_2$] (a2) at (6,0) {};
+    \node [scalar, label=below:${a_2[j]}$] (a2j) at (6,-3) {};
+    \node[op] (p) at (4.5,-2) {$++$};
+    \node[op] (m) at (4.5,-4) {$--$};
+    \node [scalar] (ss) at (9,0) {SS};
+    \coordinate (c1) at (6.3,-5) {};
+    \coordinate (c2) at (6,-4.5) {};
+    \path
+    (a1) edge [ post] node  [lbl, swap] {${\{i\}}$} (a1i)
+    (a1) edge [pre and post] node  [lbl, swap] {$\overline{\{i\}}$} (a0)
+    (a1) edge [pre and post] node  [lbl] {${\{j\}}$} (a1j)
+    (a2) edge [pre and post] node  [lbl, swap] {$\overline{\{j\}}$} (a1)
+    (a2) edge [pre and post] node  [lbl] {${\{j\}}$} (a2j)
+    (a2j) edge [post] (p)
+    (p) edge [post] (a1j)
+    (a1j) edge [post] (m)
+    (m) edge [post] (a2j)
+    (a0) edge [post,bend left=60] node  [lbl] {$\mathcal{U}(a)$} (ss)
+    (a1) edge [post,bend left=50]  node  [lbl, xshift=-8, yshift=-3] {$\mathcal{U}(a)$} (ss)
+    (a2) edge [post] node  [lbl] {$\mathcal{U}(a)$} (ss)
+    (a1j) edge [ bend right=37]  (c1)
+    (c1)edge [post, bend right=45] (ss)
+    (a2j) edge [post,  bend right=28] (ss)
+    ;
+}{A state saving node connecting all value nodes.}{fig:array-ss-vsg}
+
+\subsection{Search the VSG to retrieve an array}
+
+For array programs, we need to modify the scalar VSG search procedure of Section~\ref{sec:Prior-Foundations} to take the appropriate action when it encounters an array node.
+
+%For a VSG with array nodes, 
+%The searching rules for arrays on the VSG is similar to that for scalars, except we have to take the array region into account.
+%In the VSG, every edge incident to an array node has both control path information and array region information. 
+
+There are three scenarios in which a search may reach an array node:
+(a) at the start of the search, when the whole array $a_0$ needs to be retrieved;
+(b) when the search reaches the array node $a_u$ from an element node $a_u[i]$, while searching for the subregion $\{i\}$;
+or
+(c) when the search reaches the array node $a_u$ from another array node $a_v$.
+In any of these cases, there will be a particular subregion that is the search target. 
+The search needs to explore the incident edges in order to find all values of the array elements in this target subregion.
+%In either case, the search continues with each incident edge with subregion $R$.
+That is, let $R_t$ be the target subregion whose values we seek at some point during the search.
+Suppose the search selects a particular outgoing edge $e$ with subregion $R_e$.
+Then, $R_e \cap R^t$ is the subregion of the array that could be retrieved using this edge.
+The search may need to continue to select edges until their union $\bigcup R_i=R^t$.
+
+%once such an edge is selected, the search begins to have an addition goal to retrieve all elements of the corresponding array in the region on that edge.
+%Only when the search reaches available array nodes or scalar value nodes can the region goal added to the search be removed.
+%At the beginning of the search, if an array node is the target node, then the search needs to retrieve all elements of the array.
+%The special searching rules for arrays:
+
+Before giving a search algorithm for array-based programs, we first state the desired properties of the search result, i.e., the RG.
+%
+Similar properties of a RG for scalar programs appeared in the original work we are using~\cite{Hou2012}.
+Here, we generalize these properties for both scalar and array value nodes.
+To formalize these properties, let $\mathcal{G}$ be a RG and consider a filtered RG, $\mathcal{G}_p$, under a control flow path $p$.
+That is, $\mathcal{G}_p$ is a graph obtained from $\mathcal{G}$ by selecting only edges with and their incident nodes if the control flow path set the edge contains $p$.
+%The properties that we will list work for $G(p)\forall p$.
+%removing every edge $e$ in $G$ if the control flow path set on $e$ does not include the path $p$ in the program. 
+%Then we can focus on each control flow path when we describe the properties of the RG.
+%From this filtered graph, when we describe the properties of each node, we need not to concern the control flow path sets any more.
+%For each edge $e$ in the RG, let $P(e)$ denote the control flow path set on it, and let $R(e)$ denote the array region set on it.
+The formal properties appear in Table~\ref{fig:RG-properties} and apply to $\mathcal{G}_p,\forall p$.
+%Each property works for every control flow path in the program.
+%
+Here, we summarize the key intuition behind each property:
+%
+\begin{itemize}
+\item Property I states that to retrieve a whole array is to retrieve all elements thereof.
+\item Property II states that every desired array element during the search must be retrieved. 
+\item Property III states that the value of each array element needs to be retrieved only once.
+\item Property IV forbids cyclic data dependence in the RG: given a loop-free program, we wish to build loop-free forward and reverse programs, which should not have any cyclic data dependences.
+\end{itemize}
+
+\begin{table}
+\centering
+\begin{tabular}{| m{0.3cm} || p{5cm} | p{5cm} |}
+%\begin{tabular}{| c || m{1cm} | m{1cm} |}
+  \hline
+   & Scalar node & Array node \\
+  \hline\hline
+  I 
+  & 
+  For each target scalar node $n$, if it is not an available node, then $OutDegree(n)>0$. 
+  &
+  For each target array node $n$, if it is not an available node, then $OutDegree(n)>0$, and $\bigcup_{\mathit{out} \in {OutEdges}(n)}{}=  \mathcal{U}(a) $.  
+   \\
+  \hline
+    II
+  & 
+  For each scalar node $n$ that is neither a target node nor an available node, then if $InDegree(n)>0$, then $OutDegree(n)>0$. 
+  &
+  For each array node $n$ that is neither a target node nor an available node, then if $InDegree(n)>0$, then $OutDegree(n)>0$, and $\bigcup_{\mathit{out} \in \text{OutEdges} (n)} R_{out} = \bigcup_{\mathit{in} \in \text{InEdges} (n) }R_{in} $.  
+   \\
+  \hline
+    III
+  & 
+  For each scalar node $n$, $OutDegree(n) \le 1$.
+  &
+ For each array node $n$, if $OutDegree(n) > 1$, then  for $e,f \in OutEdges(n)$, $e \ne f$,$R_e \cap R_f = \emptyset$.
+   \\
+  \hline
+  IV & 
+  There is no directed cycle that contains no array node.
+ &
+ For each directed cycle with array and array access edges $e_1 \dots e_n$,  $\quad \bigcap_{i=1}^n{R_{e_{i}}} = \emptyset$.
+  \\
+  \hline
+\end{tabular}
+
+\caption{The properties of the RG. The ``scalar'' column shows the properties as stated in other work~\cite{Hou2012}; the ``array'' column shows our generalizations for array-based programs.}
+\label{fig:RG-properties}
+
+\end{table}
+
+
+The formal search algorithm for array nodes
+%The principle of the search is: if an array or an element can be retrieved in all cases without state saving, our algorithm should produce this result. Else, if state saving is needed at least in some cases, the search result will also include state savings, but possible in more cases.
+appears in Algorithm~\ref{algorithm:loopfree}.
+We retrieve each desired array $a_0$ by starting a search $\texttt{SearchSubregion}(a_0, \mathcal{U}(a), \emptyset)$, thereby fulfilling Property I.
+In Lines 7-13, the algorithm tries to retrieve a subset of \texttt{subregion} through each outgoing edge from \texttt{target}, and those search results are sorted in Line 14 by cost.
+Lines 15-21 pick the best search results while also satisfying Property III.
+Note that in Line 20, if a candidate edge in \texttt{route} already exists in \texttt{resultRoute}, we update the subregion on it in \texttt{resultRoute} to be the union of itself and the subregion on the same edge in \texttt{route}. 
+Line 22 checks whether Property II is satisfied.
+Because of the existence of state saving edges, Property II can always be eventually satisfied.
+Property IV is satisfied by the cycle checks in Lines 12 \& 18.
+Finally, the search result is returned.
+
+
+This algorithm works only on array nodes.
+When the search reaches a scalar value node, we invoke the earlier version of this algorithm for scalars~\cite{Hou2012}, which is similar to Algorithm~\ref{algorithm:loopfree} but without the operations related to subregions.
+In addition, note that Algorithm~\ref{algorithm:loopfree} is run for each control flow path.
+We need to perform this algorithm on all control flow paths in the original program to retrieve any desired value.
+
+%This last fact reveals a weakness of the scheme, which was already a weakness of the scalar case and related path profiling algorithms:
+%the asymptotic cost of search grows with the number of control flow paths.
+%This cost is exponential in the program size in the worst case.
+%However, for the vast majority of reasonably structured programs, the absolute number of such paths per subprogram is not typically very large, thereby yielding reasonable compile-time costs as Section~\ref{sec:experiments} shows.
+
+An additional detail is that we must also retrieve all indices that appear in an array element node and subregions on the edges.
+To do so, we start another search to retrieve those index values and then combine the search result to the RG.
+ 
+
+\begin{algorithm}
+\DontPrintSemicolon
+\LinesNumbered
+
+\SetKwData{vertex}{arrayNode}
+\SetKwData{cond}{c}
+\SetKwData{vertexa}{v}
+\SetKwData{vertexb}{w}
+\SetKwData{subr}{subregion}
+\SetKwData{region}{r}
+\SetKwData{mask}{mask}
+\SetKwFunction{bitPosition}{position}
+\SetKwFunction{maxVal}{max}
+\SetKwFunction{SearchSubregion}{SearchSubregion}
+\SetKwFunction{OutEdges}{OutEdges}
+\SetKwInOut{Input}{Input}
+
+
+\SetKwData{NewCond}{newSubregion}
+\SetKwData{condition}{pathSet}
+\SetKwData{cond}{paths}
+\SetKwData{vertex}{target}
+\SetKwData{edge}{edge}
+\SetKwData{edges}{edges}
+\SetKwData{edgeb}{e}
+\SetKwData{target}{target}
+\SetKwData{visited}{visited}
+\SetKwData{subRoute}{newRoute}
+\SetKwData{curRoute}{currentRoute}
+\SetKwData{subGraph}{subGraph}
+\SetKwData{route}{route}
+\SetKwData{cost}{cost}
+\SetKwData{eCopy}{eCopy}
+\SetKwData{target}{target}
+\SetKwData{subRoutes}{subRoutes}
+\SetKwData{result}{resultRoute}
+\SetKwData{costSet}{costSet}
+\SetKwInOut{Input}{Input}
+
+\SetKwFunction{OutEdges}{OutEdges}
+\SetKwFunction{Max}{max}
+\SetKwFunction{HasNoCycle}{HasNoCycle}
+\SetKwFunction{SearchSubRoute}{SearchSubRoute}
+\SetKwFunction{SearchRoute}{SearchRoute}
+\SetKwFunction{UpdateConditions}{ChooseMinimalCosts}
+
+\Input{The search start point \vertex which is an array node, the target subregion \subr, and the already collected edges in the previous search \curRoute.}
+
+\BlankLine
+
+\BlankLine
+\SearchSubregion{\vertex, \subr, \curRoute} \;
+%\SearchSubregion{\vertex, \cond, \visited} \;
+\Begin{
+  \result $\leftarrow \emptyset$,  \subRoutes $\leftarrow \emptyset$, \region $\leftarrow\emptyset$ \;
+  \If{\vertex \mbox{is available}}{
+      Add \vertex to \result \;
+      %add $\langle \cond, 0 \rangle$ to \result.\costSet \;
+      \Return \result \;
+  }
+  \ForEach{\edge $\in$ \OutEdges{\vertex}}{
+    \edge.\subr $\leftarrow$ \edge.\subr $\cap$ \subr\; 
+    \lIf{\edge.\subr $=  \; \emptyset$}{continue} \;
+    %\BlankLine
+    \subRoute $\leftarrow$ \SearchSubRoute{\edge.\target, \NewCond, $\curRoute + \edge$}\;
+ 
+   Add \edge to \subRoute\;
+   \If{\HasNoCycle{ $\curRoute + \subRoute$}}{
+      Add \subRoute to \subRoutes \;
+      }
+
+  }
+  Sort \subRoutes according to cost\ in ascending order\;
+  \ForEach{\route in \subRoutes}{
+      \route.\subr $\leftarrow \route.\subr - \region$\;
+      \lIf{$\route.\subr  = \emptyset$}{
+          continue\;
+      }
+      
+   \If{\HasNoCycle{ $\result + \route$}}{
+
+      \region $\leftarrow \region \cup \route.\subr$\;
+      Add \route to \result\;
+      
+      \lIf{$\region = \subr$}{
+          break\;
+      }
+      }
+  }      
+  \lIf{$\region \ne \subr$}{
+          return $\emptyset$\;
+          }
+  Add \vertex to \result \;
+  \Return \result \;
+}
+
+\caption{Search for a subregion of an array in the VSG.}
+\label{algorithm:loopfree}
+\end{algorithm}
+
+
+
+
+\subsection{Generating code from Route Graph}
+Recall that a RG shows explicit data dependences in the corresponding reverse program, and that we need to translate the edges in the RG, visited in the reverse topological order, into statements in the reverse program.
+The Hou et al. scheme gives a concrete translation algorithm~\cite{Hou2012}.
+%Now let's look at the search result RG. 
+The biggest twist in the array case is the presence of subregions on array edges (including access and state saving edges).
+%Given a RG for programs with arrays, one big difference of it from the RG for programs with only scalars is that there are subregions on some edges, which are array edges, array access edges, and state saving array edges.
+Array edges and array access edges will not be translated into any statements because they don't really define any values---array edges come from $\delta$ functions which are pseudo-definitions that will not appear in reverse program.
+Therefore, the subregion on such an edge does not affect the generated code, as long as it is not an empty set.
+If the subregion on an edge is an empty set, this edge should be removed from the RG.
+Since a subregion is symbolically represented, as we discussed before it may be an empty set conditionally.
+%However, checking whether a subregion is empty or not may be impossible at compile time.
+For example, given a subregion $\{i\}\cap\{j\}$ where we cannot determine if $i\ne j$ at compile time, we also cannot determine if it is an empty set or not.
+If we still keep this edge during code generation, and at runtime $i\ne j$, then we may retrieve some additional values that are unnecessary to be retrieved.
+
+To avoid such redundant retrievals, in the reverse program we can add a condition as a runtime check to all code translated from this edge and following edges. 
+This extra condition guarantees the subregion cannot be empty.
+For example, the condition to be added for the subregion $\{i\}\cap\{j\}$ is $if\;(i\ne j)$.
+
+An alternative method is to avoid adding runtime conditions, which makes the code generation easier and reduces the number of conditions in the reverse program.
+The price is that we may recover some values which are not really needed, or we may retrieve a value more than once.
+However, such redundant restores do not affect the correctness of the reverse program.
+%The search algorithm guarantees that we won't make additional state savings, because once the state saving is needed with some runtime conditions, we'd better to select to directly store that element to minimize the cost.
+
+
+Let us now consider the overall scheme for the running example used in this section.
+Assume that the input is $a_0$, that the output is $a_2$, and that the indices $i$ and $j$ are available values.
+To build a reverse program with input $a_2$ and output $a_0$ from the VSG shown in Figure~\ref{fig:array-ss-vsg}, we will search the for values of all elements of $a_0$ from $a_2$. 
+The search result is shown in Figure~\ref{fig:rg-loopless}.
+
+
+\Drawgraph{
+ \node [array, label=above:$a_0$] (a0) at (0,0) {};
+    %\node [scalar, label=below:${a_0[j]}$] (a0j) at (-3,-3) {};
+    \node [array, label=above:$a_1$] (a1) at (3,0) {};
+    \node [scalar, label=below:${a_1[j]}$] (a1j) at (3,-3) {};
+    \node [scalar, label=below:${a_2[j]}$] (a2j) at (6,-3) {};
+    \node [array, available, label=above:$a_2$] (a2) at (6,0) {};
+    \node[op] (m) at (4.5,-4) {$--$};
+    \node[scalar, available] (ss) at (9,0) {SS};
+    \path
+    (a1) edge [post] node  [lbl, swap] {${\overline{\{i\}}\cap\{j\}}$} (a1j)
+    (a1) edge [pre] node  [lbl, swap] {$\overline{\{i\}}$} (a0)
+    (a2) edge [pre] node  [lbl, swap] {$\overline{\{i\}}\cap\overline{\{j\}}$} (a1)
+    (a1j) edge [post] (m)
+    (a2j) edge[post] (a2)
+    (m) edge [post] (a2j)
+    (a0) edge [post,bend left=60] node  [lbl] {$\{i\}$} (ss)
+    %(a1) edge node  [lbl] {${\{i\}}$} (a1i)
+    %(a2) edge  node  [lbl] {$\mathcal{U}(a)$} (ss)
+    %(a1i) edge [bend right=60] (ss)
+    %(a2j) edge (ss)
+    ;
+}{The RG built from the search on the VSG shown in Figure~\ref{fig:array-ss-vsg}.}{fig:rg-loopless}
+
+From this RG, the overall algorithm will generate the following forward (left) and the reverse (right) programs:
+%
+\small
+\begin{multicols}{2}  
+%
+ \begin{flalign*} 
+& store(a[i]);\\
+& a[i] := 0;\\
+& a[j] := a[j] + 1;\\
+\end{flalign*} 
+
+ \begin{flalign*} 
+& if (i\ne j)\\
+& \;\;\;\; a[j] := a[j] - 1;\\
+& restore(a[i]);\\
+\end{flalign*} 
+\end{multicols}
+\normalsize
+%
+Observe that the condition $if(i\ne j)$ in the reverse program is generated according to the subregion $\overline{\{i\}}\cap\{j\}$ on the edge $a_1\to a_i[j]$, which is necessary to ensure it is not empty.
+If we remove this condition  from the reverse program, we still get a correct result.
+Moreover, in the case of $i=j$, the operation $a[j] = a[j] - 1$ is unnecessary but it does not have any correctness side effects.
+
+
+% eof

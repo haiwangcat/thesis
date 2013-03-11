@@ -346,10 +346,10 @@ When the search reaches a scalar value node, we invoke the earlier version of th
 In addition, note that Algorithm~\ref{algorithm:loopfree} is run for each control flow path.
 We need to perform this algorithm on all control flow paths in the original program to retrieve any desired value.
 
-%This last fact reveals a weakness of the scheme, which was already a weakness of the scalar case and related path profiling algorithms:
-%the asymptotic cost of search grows with the number of control flow paths.
-%This cost is exponential in the program size in the worst case.
-%However, for the vast majority of reasonably structured programs, the absolute number of such paths per subprogram is not typically very large, thereby yielding reasonable compile-time costs as Section~\ref{sec:experiments} shows.
+This last fact reveals a weakness of the scheme, which was already a weakness of the scalar case and related path profiling algorithms:
+the asymptotic cost of search grows with the number of control flow paths.
+This cost is exponential in the program size in the worst case.
+However, for the vast majority of reasonably structured programs, the absolute number of such paths per subprogram is not typically very large, thereby yielding reasonable compile-time costs as Section~\ref{sec:experiments} shows.
 
 An additional detail is that we must also retrieve all indices that appear in an array element node and subregions on the edges.
 To do so, we start another search to retrieve those index values and then combine the search result to the RG.
@@ -460,7 +460,7 @@ To do so, we start another search to retrieve those index values and then combin
 
 \subsection{Generating code from Route Graph}
 Recall that a RG shows explicit data dependences in the corresponding reverse program, and that we need to translate the edges in the RG, visited in the reverse topological order, into statements in the reverse program.
-The Hou et al. scheme gives a concrete translation algorithm~\cite{Hou2012}.
+Our scheme gives a concrete translation algorithm as shown in Algorithm \ref{algorithm:reverse-cfg}.
 %Now let's look at the search result RG. 
 The biggest twist in the array case is the presence of subregions on array edges (including access and state saving edges).
 %Given a RG for programs with arrays, one big difference of it from the RG for programs with only scalars is that there are subregions on some edges, which are array edges, array access edges, and state saving array edges.
@@ -512,24 +512,22 @@ The search result is shown in Figure~\ref{fig:rg-loopless}.
     ;
 }{The RG built from the search on the VSG shown in Figure~\ref{fig:array-ss-vsg}.}{fig:rg-loopless}
 
-From this RG, the overall algorithm will generate the following forward (left) and the reverse (right) programs:
-%
-\small
-\begin{multicols}{2}  
-%
- \begin{flalign*} 
-& store(a[i]);\\
-& a[i] := 0;\\
-& a[j] := a[j] + 1;\\
-\end{flalign*} 
+From this RG, the overall algorithm will generate the following forward (first) and the reverse (second) programs:
 
- \begin{flalign*} 
-& if (i\ne j)\\
-& \;\;\;\; a[j] := a[j] - 1;\\
-& restore(a[i]);\\
-\end{flalign*} 
-\end{multicols}
-\normalsize
+
+\begin{lstlisting}
+store(a[i]);
+a[i] = 0;
+a[j] = a[j] + 1;
+\end{lstlisting}
+
+
+\begin{lstlisting}
+if (i != j)
+    a[j] = a[j] - 1;
+restore(a[i]);
+\end{lstlisting}
+
 %
 Observe that the condition $if(i\ne j)$ in the reverse program is generated according to the subregion $\overline{\{i\}}\cap\{j\}$ on the edge $a_1\to a_i[j]$, which is necessary to ensure it is not empty.
 If we remove this condition  from the reverse program, we still get a correct result.

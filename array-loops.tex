@@ -630,43 +630,39 @@ The search result of $i_1$ is shown in Figure~\ref{fig:deltaencoding}(e).
 In the reverse program we build the loop body from the bold edges in  Figure~\ref{fig:deltaencoding}(b)\&(e).
 %Please refer to \cite{HouRC} for the reason and more details.
 The loop condition of the generated loop is built as the same  one  in the original loop.
-The synthesized reverse program is shown below on the left.
+The synthesized reverse program is shown below.
 Since there is no state saving used, the forward program is identical to the original one.
+
+
+\begin{lstlisting}
+int delta = 0;
+int i = 0;
+do {
+    int t = a[i] + delta;
+    a[i] = t;
+    delta = t;
+    i = i + 1;
+} while (i < N);
+\end{lstlisting}
 
 Figure~\ref{fig:deltaencoding}(c)\&(f) show another search result that contains reverse edges.
 However, since the value $delta_3$ is unknown, it needs to be stored in the forward program (there should be an edge connecting $delta_3$ to the state saving node, which is omitted here).
-The resulted reverse program is shown below on the right.
+The resulted reverse program is shown below.
 We prefer the first result because there is no state saving used.
 %
 %
-\small
-\begin{multicols}{2}  
-%
- \begin{flalign*} 
- & int \; delta:=0;\\
- & int \; i:=0;\\
-& do\;\{\\
-& \;\;\;\;int \; t:=a[i]+delta;\\
-& \;\;\;\;a[i] := t;\\
-& \;\;\;\;delta:=t;\\
-& \;\;\;\;i:=i+1;\\
-& \}\;while(i<N);\\
-\end{flalign*} 
 
- \begin{flalign*} 
- & int \; delta;\\
- & restore(delta); \\
- & int \; i:=N;\\
-& do\;\{\\
-& \;\;\;\;i:=i-1;\\
-& \;\;\;\;int \; t:=delta;\\
-& \;\;\;\;delta:=t-a[i];\\
-& \;\;\;\;a[i] := t;\\
-& \}\;while(i\ne 0);\\
-\end{flalign*} 
-
-\end{multicols}
-\normalsize
+\begin{lstlisting}
+int delta;
+restore(delta);
+int i = N;
+do {
+    i = i - 1;
+    int t = delta;
+    delta = t - a[i];
+    a[i] = t;
+} while (i != 0);
+\end{lstlisting}
 
 \begin{comment}
 

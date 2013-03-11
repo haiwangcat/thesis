@@ -45,7 +45,7 @@ These new edges serve as markers: when we search the VSG and produce an RG conta
 %
 Since Steps 1 and 2 use our prior VSG construction, we need not discuss them further here.
 What changes is the third step, as detailed below, including new VSG searching rules and new procedures for synthesizing loops from the search result (i.e., the RG). %We first deal with while loops then other loops.
-%Because state saving in a loop is very expensive, we won't consider it in a loop. Moreover, it suffices for us to deal with a single loop without nested loops, which can be handled in the same way recursively.
+Because state saving in a loop is very expensive, we won't consider it in a loop. Moreover, it suffices for us to deal with a single loop without nested loops, which can be handled in the same way recursively.
 
 %Then the question is how can we connect the VSG for the whole program after reducing all loops and VSGs for loop bodies, and let the search freely traverse them to get the final VG. 
 
@@ -213,16 +213,14 @@ A new search is needed to acquire those values, and the search result will be co
 For the example above, we can build a loop below that has the same number of iterations as the original one. The omitted statements will be substituted by the loop body built above.
 
 
+\begin{lstlisting}
+i = 0;
+while (A[i] > 0) {
+    /* ... */
+    i = i + 2;
+}
+\end{lstlisting}
 
-\small
-\begin{verbatim}
-                          i = 0;
-                          while (A[i] > 0) {
-                              /* ... */
-                              i = i + 2;
-                          }
-\end{verbatim}
-\normalsize
 
 
 %In the second case, we  
@@ -233,7 +231,10 @@ For the example above, we can build a loop below that has the same number of ite
 
 \item \textbf{Approach 2:} Building the loop predicate from a variable updated in the loop. Given a variable $v$ and its four definitions: \vinit, \vmu, \viter, and \vfinal, if \vmu$\ne$\vfinal in each iteration except the last definition of \vmu (which is actually \vfinal), and if we can retrieve \vinit and \vfinal before the loop (hence we cannot retrieve them through the loop), and \viter in the loop, we can use them to build a while loop as:
 $$
-u := v_{in}; \; while (u \ne v_{out}) \;  \{\; /* \; update \; u \; */ \; \}
+u := v_{in}; \;\\
+while (u \ne v_{out}) \;  \{\; 
+/* \; update \; u \; */ \; 
+\}
 $$
 
 Similarly, if \viter$\ne$\vinit  in each iteration, and  \vinit and \vfinal can be retrieved before the loop, and \vmu can be retrieved in the loop, we can use them to build a while loop as: 
@@ -248,15 +249,13 @@ Another is that of induction variables, which are special monotonic variables th
 
 
 
-\small
-\begin{verbatim}
-                          i = 0;
-                          while (i != i1) {
-                              /* ... */
-                              i = i + 2;
-                          }
-\end{verbatim}
-\normalsize
+\begin{lstlisting}
+i = 0;
+while (i != i1) {
+    /* ... */
+    i = i + 2;
+}
+\end{lstlisting}
 
 
 %Indeed, the first approach above is a special case of this one if we define another Boolean variable $c$ as $a < b$, where $c$ satisfies the condition above.
@@ -281,21 +280,25 @@ Another is that of induction variables, which are special monotonic variables th
 \item \textbf{Approach 3:} Instrumenting the original loop with a counter counting the number of iterations. The counter has the initial value zero and is incremented by one on each back edge of the loop.
 The final value of the counter is stored in the forward program and restored in the reverse program as the maximum value of another loop counter.
 This approach generally works if either of the above two approaches fail.
-However, it requires instrumentation (the counter), and therefore forces generation of a forward program. Below we show the instrumented loop in the forward program (left) and the generated loop in the reverse program (right) for the above example.
+However, it requires instrumentation (the counter), and therefore forces generation of a forward program. Below we show the instrumented loop in the forward program (first) and the generated loop in the reverse program (second) for the above example.
+
+\begin{lstlisting}
+i = 0;
+count = 0;
+while (A[i] > 0) {
+    /* ... */
+    i = i + 2;
+    count = count + 1;
+}
+\end{lstlisting}
 
 
-\small
-\begin{verbatim}
-        i = count = 0;                   restore(count);
-        while (A[i] > 0) {               while (count > 0) {
-            /* ... */                        /* ... */
-            i = i + 2;                       count = count - 1;
-            count = count + 1;           }
-        }                             
-        store(count);
-\end{verbatim}
-\normalsize
-
+\begin{lstlisting}
+while (count > 0) {
+    /* ... */
+    count = count - 1;
+}
+\end{lstlisting}
 
 
 \end{itemize}
@@ -331,32 +334,42 @@ We can discover that $s$ is a monotonic variable, and that both the initial and 
 To get $s_2$, we search its value on the VSG and the search result is shown in Figure \ref{fig:loop_vsg}(e). 
 As a result, we build the loop predicate from $s$ and the reverse program is generated as below.
 
-\small
-\begin{verbatim}
-                              n = 0;
-                              while (s != 0) {
-                                  n = n + 1;
-                                  s = s - n;
-                              }
-\end{verbatim}
-\normalsize
 
+\begin{lstlisting}
+while (s != 0) {
+    n = n + 1;
+    s = s - n;
+}
+\end{lstlisting}
 
-\begin{comment}
 
 Above we have built a reverse loop in the reverse program, but it is also possible that the reverse program contains a forward loop. 
-For instance, if we change our example into the program shown  below left, without modifying its semantic, its inverse will contain a forward loop which is shown on the right. This is because the input of the new program $n_0$ is equal to $i$'s final value, which is the output of the loop. 
-\begin{verbatim}
-          s = 0;                     s2 = 0; 
-          i = 0;                     i = 0;
-          while (i < n) {            while (s2 != s) {
-            i = i + 1;                 i = i + 1;
-            s = s + i;                 s2 = s2 + i;
-          }                          }
-                                     n = i;
-\end{verbatim}
+For instance, if we change our example into the program shown  below:
 
-\end{comment}
+
+\begin{lstlisting}
+s = 0;
+i = 0;
+while (i < n) {
+    i = i + 1;
+    s = s + i;
+}
+\end{lstlisting}
+
+
+Without modifying its semantic, its inverse will contain a forward loop which is shown below:
+
+\begin{lstlisting}
+s2 = 0;
+i = 0;
+while (s2 != s) {
+    i = i + 1;
+    s2 = s2 + i;
+}
+n = i;
+\end{lstlisting}
+
+ This is because the input of the new program $n_0$ is equal to $i$'s final value, which is the output of the loop. 
 
 %\subsubsection{Other single-exit loops}
 %The while loop we discussed above is just one kind of the single-exit loops. %Do-while loop is another single-exit loop. 
@@ -403,7 +416,11 @@ Note that after removing exit edges it is possible that a previous branch node b
 \end{figure}
 
 After the transformation, all loops in the program become while loops and our method applies.
-%Since the new generated loop predicate  is unknown, to build the predicate of the loop in the reverse program, we cannot use the first approach proposed above any more. Therefore, it is preferred that a loop be transformed into a while loop normally, not in the above method. For example, a do-while loop can be easily converted into a while loop.
+Since the new generated loop predicate  is unknown, to build the loop predicate  in the reverse program, we cannot use the first approach proposed above any more. %Therefore, it is preferred that a loop be transformed into a while loop normally, not in the above method. For example, a do-while loop can be easily converted into a while loop.
 
-%Because the new loop and the epilog share the same code in the forward function,  any instrumentation will also be shared between them. For example, if a value defined in the epilog needs a state saving, we can only perform the state saving in the loop, which results in saving a value many times and then time overhead. Properly defining the cost of this operation may help to get the better search result. % On the other hand, if a state saving is made from reversing the loop hammock, at the exit of the loop, any side effect should be taken care. For example, if a stack is used to store variables, the pop operations may be needed at the exits.
+Because those two newly created branch bodies share the same code in the forward program,  any instrumentation will also be shared between them. 
+For example, if a value defined in the false body above needs a state saving, in the forward program we can only perform the state saving in the loop, which results in saving a value many times and then larger time overhead. 
+For this reason, we could forbid state savings on any variable in the false body.
+Properly defining the cost of this operation may help to get the better search result. 
+%On the other hand, if a state saving is made from reversing the loop hammock, at the exit of the loop, any side effect should be taken care. For example, if a stack is used to store variables, the pop operations may be needed at the exits.
 

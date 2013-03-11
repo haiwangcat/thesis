@@ -40,7 +40,7 @@ In this section, we will use the example shown in Figure~\ref{fig:code_example} 
 
 \begin{figure}
 \centering
-\includegraphics[width=400pt]{figures1/CodeExample.pdf}
+\includegraphics[width=430pt]{figures1/CodeExample.pdf}
 \caption{(a) The original function $\quad$ (b) The forward function$\quad$ (c) The reverse function}
 \label{fig:code_example}
 \end{figure}
@@ -51,12 +51,104 @@ An SSA graph \cite{Alpern1988,Cooper2001}, built based on SSA form, consists of 
 The full algorithm for building an SSA graph is presented in \cite{Muchnick}. 
 Figure \ref{fig:VSG}(a)(b) show the SSA-transformed CFG and its SSA graph for the function in Figure \ref{fig:code_example}(a). In this example, \texttt{a} and \texttt{b} are two target variables with initial values \texttt{a$_0$} and \texttt{b$_0$}, and final values \texttt{a$_3$} and \texttt{b$_2$}.
 
+\begin{comment}
 \begin{figure}
 \centering
 \includegraphics[width=400pt]{figures1/CFG.pdf}
 \caption{(a) The SSA-transformed CFG of the function in Figure \ref{fig:code_example}(a)$\quad\quad$ (b) The corresponding SSA graph $\quad\quad$ (c) The corresponding value search graph. Nodes with bold outlines are available nodes; outgoing edges for these nodes are omitted because available nodes need not be recovered. `SS' is the special state saving node. Edges are annotated with their CFG path set.}
 \label{fig:VSG}
 \end{figure}
+\end{comment}
+
+\begin{figure}%
+\centering
+
+\begin{subfigure}{0.5\textwidth}
+\Drawgraph{
+    \node [array,font=\small] (1) at (0,-.5) {\texttt{Entry}};
+    \node [array,font=\small] (2) at (0,-2) {\texttt{if (a$_0$ == 0)}};
+    \node [array,font=\small] (3) at (-2,-4) {\texttt{a$_1$ = 1;}};
+    \node [array,font=\small] (4) at (2,-4)  {
+    \parbox{2.7cm}{
+    \texttt{b$_1$ = a$_0$ + 10;}\\
+      \texttt{a$_2$ = 0;}
+    }};
+    \node [array,font=\small] (5) at (0,-6) {
+    \parbox{3cm}{
+    \texttt{a$_3$ = $\phi$(a$_1$, a$_2$);}\\
+      \texttt{b$_2$ = $\phi$(b$_0$, b$_1$);}
+    }};
+    \node [array,font=\small] (6) at (0,-7.5) {\texttt{Exit}};
+    \path
+    (1) edge [post] (2)
+    (2) edge [post] node  [lbl,swap,yshift=-3] {T}(3)
+    (2) edge [post]  node  [lbl,yshift=-3] {F}(4)
+    (3) edge [post] (5)
+    (4) edge [post] (5)
+    (5) edge [post] (6)
+    ;
+}{}{}
+\end{subfigure}%
+\\
+\begin{subfigure}{0.5\textwidth}
+\Drawgraph{
+    \node [scalar, available, label=below:$a_1$] (a1) at (0,2) {1};
+    \node [scalar, available,label=below:$a_2$] (a2) at (2,2) {0};
+    \node [scalar, available,label=above:$a_3$] (a3) at (1,3.5) {$\phi$};
+    \node [scalar,label=below:$a_0$] (a0) at (4,-2.5) {};
+    \node [scalar,available] (10) at (6,-2.5) {10};
+    \node [scalar,available] (0) at (2,-2.5) {0};
+    \node [scalar, label=above:$b_0$] (b0) at (5,3.5) {};
+    \node [scalar, label=right:$b_1$] (b1) at (5,.5) {};
+    \node [scalar,available,label=right:$b_2$] (b2) at (6,2) {$\phi$};
+    \node [scalar,available] (ss) at (4,2) {SS};
+    \node [op] (p) at (5.5,-1) {$+$};
+    \node [op] (m) at (4.5,-1) {$-$};
+    \path
+    (a0) edge [post] node  [lbl] {T,F} (ss)
+    (b0) edge [post] node  [lbl,swap] {T,F} (ss)
+    (b1) edge [post] node  [lbl, yshift=3,xshift=3] {F} (ss)
+    (b0) edge [pre and post] node  [lbl] {T} (b2)
+    (b1) edge [pre and post] node  [lbl,swap, yshift=3] {F} (b2)
+    (a0) edge [post] node  [lbl] {T} (0)
+    (a0) edge [post] node  [lbl,swap, yshift=3,xshift=-3] {F} (m)
+    (m) edge [post] node  [lbl] {} (b1)
+    (m) edge [post] node  [lbl] {} (10)
+    (p) edge [post] node  [lbl] {} (a0)
+    (p) edge [post] node  [lbl] {} (10)
+    (b1) edge [post] node  [lbl, yshift=-3,xshift=0] {F} (p)
+    (a1) edge [pre and post] node  [lbl] {T} (a3)
+    (a2) edge [pre and post] node  [lbl,swap] {F} (a3)
+    ;
+}{}{}
+\end{subfigure}%
+~
+\begin{subfigure}{0.5\textwidth}
+\Drawgraph{
+    \node [scalar,label=below:$a_0$] (a0) at (4,-2.5) {};
+    \node [scalar,available] (10) at (6,-2.5) {10};
+    \node [scalar,available] (0) at (2,-2.5) {0};
+    \node [scalar, label=above:$b_0$] (b0) at (5,3.5) {};
+    \node [scalar, label=right:$b_1$] (b1) at (5,.5) {};
+    \node [scalar,available,label=right:$b_2$] (b2) at (6,2) {$\phi$};
+    \node [scalar,available] (ss) at (4,2) {SS};
+    \node [op] (m) at (4.5,-1) {$-$};
+    \path
+    (b0) edge [post] node  [lbl,swap] {F} (ss)
+    (b0) edge [post] node  [lbl] {T} (b2)
+    (b1) edge [post] node  [lbl,swap, yshift=3] {F} (b2)
+    (a0) edge [post] node  [lbl] {T} (0)
+    (a0) edge [post] node  [lbl,swap, yshift=3,xshift=-3] {F} (m)
+    (m) edge [post] node  [lbl] {} (b1)
+    (m) edge [post] node  [lbl] {} (10)
+    ;
+}{}{}
+\end{subfigure}%
+
+\caption{(a) The SSA-transformed CFG of the function in Figure \ref{fig:code_example}(a)$\quad\quad$ (b) The corresponding SSA graph $\quad\quad$ (c) The corresponding value search graph. Nodes with bold outlines are available nodes; outgoing edges for these nodes are omitted because available nodes need not be recovered. `SS' is the special state saving node. Edges are annotated with their CFG path set.}
+\label{fig:VSG}
+\end{figure}
+
 
 
 
@@ -105,15 +197,35 @@ We apply the following rules to convert an SSA graph into a value search graph:
 \end{itemize}
 
 \paragraph{Lossless operations} For certain operations, such as integer addition and exclusive-or, we can recover the value of an operand given the operation result and the other operand. For example, if $a=b+c$, we can recover $b$ given $a$ and $c$. For each such lossless operation, insert new operation nodes that connect its result to its operands, allowing the operands to be recovered from the result. The new nodes are added according to the following rules:
-\begin{itemize}
-	\item Negation (\texttt{a = -b}) and bitwise not (\texttt{a = \textasciitilde b}):$\;$ the new operations are  \texttt{b = -a} or \texttt{b = \textasciitilde a}, respectively.
-	
-	\item Increment (\texttt{++a}) and decrement (\texttt{--a}):$\;$ insert \texttt{--a} or \texttt{++a}, respectively.
-	
-	\item Integer addition (\texttt{a = b + c}) and subtraction:$\;$ for addition, the new operations are \texttt{b = a - c} and \texttt{c = a - b}; analogously for subtraction.
-	
-	\item Bitwise exclusive-or (\texttt{a = b \textasciicircum{ }c}):$\;$ insert \texttt{b = a \textasciicircum{ }c} and \texttt{c = a \textasciicircum{ }b}
-\end{itemize}
+
+%\footnote{Assume there is no type conversion. Type conversion can be treated as a special operation, which we won't discuss here.}
+
+\begin{center}
+\begin{tabular}{|c|c|c|}
+  \hline
+  Operation name & Original operation & New operations added \\
+  \hline \hline 
+  Negation & \texttt{a = -b} & \texttt{b = -a} \\
+  \hline    
+  Bitwise not& \texttt{a = \textasciitilde b} & \texttt{b = \textasciitilde a} \\
+  \hline
+  Logical not& \texttt{a = !b} & \texttt{b = !a} \\
+  \hline    
+  Increment & \texttt{++a} & \texttt{--a} \\
+  \hline    
+  Decrement & \texttt{--a} & \texttt{++a} \\
+  \hline
+  Integer addition & \texttt{a = b + c} & \texttt{b = a - c} \\
+  {} & {} & \texttt{c = a - b} \\
+  \hline
+  Integer subtraction & \texttt{a = b - c} & \texttt{b = a + c} \\
+  {} & {} & \texttt{c = b - a} \\
+  \hline
+  Bitwise exclusive-or & \texttt{a = b \textasciicircum{ }c} & \texttt{b = a \textasciicircum{ }c} \\
+  {} & {} & \texttt{c = a \textasciicircum{ }b} \\
+  \hline
+\end{tabular}
+\end{center}
 
 \begin{comment}
 \begin{figure}

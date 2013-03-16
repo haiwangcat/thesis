@@ -190,15 +190,15 @@ For each variable we remove the edge between the $\mu$ and $\mu'$ nodes and henc
 To guarantee that the generated loop has the same iterations at runtime as the original loop, we need to build a proper loop predicate. 
 We propose three approaches to building a correct loop predicate. 
 To illustrate those approaches, we temporarily introduce the following loop example. We assume that the omitted statements  modify neither \texttt{A[]} nor \texttt{i}.
-\small
-\begin{verbatim}
-                              i = 0;
-                              while (A[i] > 0) {
-                                  /* ... */
-                                  i = i + 2;
-                              }
-\end{verbatim}
-\normalsize
+
+\begin{lstlisting}
+i = 0;
+while (A[i] > 0) {
+    /* ... */
+    i = i + 2;
+}
+\end{lstlisting}
+
 
 
 %The first two approaches are preferred since they may not need any instrumentation to the original loop, but cannot be always applied, and the third one needs an instrumentation to the forward program and is always working. 

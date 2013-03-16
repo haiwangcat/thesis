@@ -499,8 +499,15 @@ Since the subregion represented by $j$ is $[j_0:s_j:j_1]$, we have to retrieve t
 
 }{The RG for the second search result.}{fig:delta-encoding-rg}
 \end{subfigure}
-~
-\begin{subfigure}{\textwidth}
+
+\caption{The VSGs and RGs (Part 1).}
+\label{fig:deltaencoding1}
+\end{figure*}
+
+\begin{figure*}
+\centering
+
+\begin{subfigure}{0.33\textwidth}
 \centering
 \Drawgraph {
   \node [scalar, available] (i0) [label=below:{$i_0$}] at (-.7,0) {0};
@@ -522,7 +529,7 @@ Since the subregion represented by $j$ is $[j_0:s_j:j_1]$, we have to retrieve t
 }{The VSG of $i$.}{fig:delta-encoding-rg}
 \end{subfigure}%
 ~
-\begin{subfigure}{\textwidth}
+\begin{subfigure}{0.33\textwidth}
 \centering
 \Drawgraph {
   \node [scalar, available] (i0) [label=below:{$i_0$}] at (-.7,0) {0};
@@ -538,7 +545,7 @@ Since the subregion represented by $j$ is $[j_0:s_j:j_1]$, we have to retrieve t
 }{The RG of $i$ for the first search result.}{fig:delta-encoding-rg}
 \end{subfigure}%
 ~
-\begin{subfigure}[b]{0.15\textwidth}
+\begin{subfigure}{0.33\textwidth}
 \Drawgraph {
   \node [scalar] (i1) [label=below:{$i_1$}] at (2,0) {$\mu$};
   \node [scalar] (i2) [label=above:{$i_2$}] at (2,3) {};
@@ -552,15 +559,15 @@ Since the subregion represented by $j$ is $[j_0:s_j:j_1]$, we have to retrieve t
     ;
 }{The RG  of $i$ for the second search result.}{fig:delta-encoding-rg}
 \end{subfigure}
-\caption{The VSGs and RGs.}
-\label{fig:deltaencoding}
+\caption{The VSGs and RGs (Part 2).}
+\label{fig:deltaencoding2}
 \end{figure*}
 
 
 
 
 As an example, let's  look at how to reverse a delta encoding program, which is shown below together with its SSA form.
-The VSG is built and shown in Figure~\ref{fig:deltaencoding}(a)\&(d).
+The VSG is built and shown in Figure~\ref{fig:deltaencoding1}(a)\&\ref{fig:deltaencoding2}(a).
 There are three available value nodes: $a_3$, which is the output of the program;  $delta_0$, which is a constant value; and $i_3$, whose value  $N$ is calculated by solving constraints~\cite{HouRC}. Their corresponding value nodes are shown in bold in the VSG.
 Our goal is searching the VSG for $a_0$.
 
@@ -583,7 +590,8 @@ Our goal is searching the VSG for $a_0$.
 & /*\; Input: a_0\;*/\\
 & int \; delta_0 := 0,\;i_0 := 0; \\
 & do \;\{ \\
-& \;\;\;\; i_1:=\mu(i_0, i_3); \; a_1 := \mu (a_0, a_2); \\
+& \;\;\;\; i_1:=\mu(i_0, i_3); \\
+& \;\;\;\; a_1 := \mu (a_0, a_2); \\
 & \;\;\;\; delta_1:=\mu(delta_0, delta_2); \\
 & \;\;\;\; int \; t_0 := a_1[i_1]; \\
 & \;\;\;\; a_2[i_1]:=t_0- delta_1; \\
@@ -592,7 +600,8 @@ Our goal is searching the VSG for $a_0$.
 & \;\;\;\; delta_2 := t_0; \\
 &\;\;\;\; i_2:=i_1+1; \\
 & \}\;while \; (i_2 < N);  \\
-& i_3 := \eta (i_2); \; a_3 := \eta (a_2); \\
+& i_3 := \eta (i_2); \\
+& a_3 := \eta (a_2); \\
 & delta_3 := \eta (delta_2); \\
 & /*\; Output: a_3\;*/\\
 }
@@ -601,7 +610,7 @@ Our goal is searching the VSG for $a_0$.
 
 There is only one use of the element of $a_1$ in the loop through the index $i_1$. 
 Therefore, we inquire the value of $a_1[i_1]$ for all iterations.
-At the iteration $t$, from the subregion on the edge \Edge{a_0}{a_1} as shown in Figure~\ref{fig:deltaencoding}(a), we have $(a_0\equiv a_1)@\overline{[i_0:i^t_1-1]}$.
+At the iteration $t$, from the subregion on the edge \Edge{a_0}{a_1} as shown in Figure~\ref{fig:deltaencoding1}(a), we have $(a_0\equiv a_1)@\overline{[i_0:i^t_1-1]}$.
 Because $i_1^t > i^t_1-1$, and hence $i_1^t\notin \overline{[i_0:i^t_1-1]}$, then we have $a_0[i_1^t]= a_1[i_1^t]$.
 On the VSG, we can get $a_1[i_1^t]$ through $t_0$ from $a_2[i_1^t]+delta_1^t$, and then the search forks to two directions:
 one begins with $a_2[i_1^t]$ and one begins with $delta_1^t$.
@@ -622,12 +631,12 @@ The search for $delta_1$ follows the searching rule in \cite{HouRC}.
 %The only choice is taking the forward edge $delta_1\to delta_2$ and go back to $t_0$,  forming a legal cycle  because it contains a forward edge.
 %Also because the forward edge is already taken, the edge $delta_1\to delta_0$ should also be selected to let the search exit the loop.
 %
-Figure~\ref{fig:deltaencoding}(b) shows one search result. 
+Figure~\ref{fig:deltaencoding1}(b) shows one search result. 
 As the value of $i_1$ is required as the index of $a_1$ and $a_2$, we start another search for it.
 Note that previously a forward edge $delta_1 \to delta_2$ is already selected, forcing the generated loop to have the same iteration order as the original loop. 
 Therefore, during the search for $i_1$ the reverse edge $i_2\to i_1$ cannot be selected.
-The search result of $i_1$ is shown in Figure~\ref{fig:deltaencoding}(e).
-In the reverse program we build the loop body from the bold edges in  Figure~\ref{fig:deltaencoding}(b)\&(e).
+The search result of $i_1$ is shown in Figure~\ref{fig:deltaencoding2}(b).
+In the reverse program we build the loop body from the bold edges in  Figure~\ref{fig:deltaencoding1}(b)\&\ref{fig:deltaencoding2}(b).
 %Please refer to \cite{HouRC} for the reason and more details.
 The loop condition of the generated loop is built as the same  one  in the original loop.
 The synthesized reverse program is shown below.
@@ -645,7 +654,7 @@ do {
 } while (i < N);
 \end{lstlisting}
 
-Figure~\ref{fig:deltaencoding}(c)\&(f) show another search result that contains reverse edges.
+Figure~\ref{fig:deltaencoding1}(c)\&\ref{fig:deltaencoding2}(c) show another search result that contains reverse edges.
 However, since the value $delta_3$ is unknown, it needs to be stored in the forward program (there should be an edge connecting $delta_3$ to the state saving node, which is omitted here).
 The resulted reverse program is shown below.
 We prefer the first result because there is no state saving used.

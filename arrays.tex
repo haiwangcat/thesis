@@ -37,21 +37,13 @@ As such, key operations we will use are:
 %, which, however, possibly could not be determined at compile time.
 %From the operations and the results shown below, we can conclude that checking the equality and inequality between two symbols at compile time is essential to get the results.
 
-$$
-\{i\}\cap {\{j\}} = \left\{ \begin{array}{ccl}  \{i\} & \mbox{if }  i = j \\ \emptyset & \mbox{if }  i \ne j  \end{array}\right.
-$$
-$$
-\{i\}\cap \overline{\{j\}} = \left\{ \begin{array}{cc}  \{i\} & \mbox{if }  i \ne j \\ \emptyset & \mbox{if }  i = j \end{array}\right. 
-$$
-$$
-\{i\}\cup {\{j\}} = \left\{ \begin{array}{cc}  \{i\} & \mbox{if } i = j \\ \{i\}\cup {\{j\}}  & \mbox{if }  i \ne j \end{array}\right. 
-$$
-$$
-\{i\}\cup \overline{\{j\}} = \left\{ \begin{array}{cc}  \mathcal{U} & \mbox{if } i = j \\ \overline{\{j\}} & \mbox{if }  i \ne j \end{array}\right.
-$$
-$$
-\{i\}\cap [p:q] = \left\{ \begin{array}{cc}  [p:q] & \mbox{if } i \ge p \mbox{ and } i\le q \\ {\emptyset} & \mbox{if } i < p \mbox{ or } i> q \end{array}\right.
-$$
+\begin{align*}
+\{i\}\cap {\{j\}} &= \left\{ \begin{array}{ccl}  \{i\} & \mbox{if }  i = j \\ \emptyset & \mbox{if }  i \ne j  \end{array}\right. \\
+\{i\}\cap \overline{\{j\}} &= \left\{ \begin{array}{cc}  \{i\} & \mbox{if }  i \ne j \\ \emptyset & \mbox{if }  i = j \end{array}\right. \\
+\{i\}\cup {\{j\}} &= \left\{ \begin{array}{cc}  \{i\} & \mbox{if } i = j \\ \{i\}\cup {\{j\}}  & \mbox{if }  i \ne j \end{array}\right. \\
+\{i\}\cup \overline{\{j\}} &= \left\{ \begin{array}{cc}  \mathcal{U} & \mbox{if } i = j \\ \overline{\{j\}} & \mbox{if }  i \ne j \end{array}\right. \\
+\{i\}\cap [p:q] &= \left\{ \begin{array}{cc}  [p:q] & \mbox{if } i \ge p \mbox{ and } i\le q \\ {\emptyset} & \mbox{if } i < p \mbox{ or } i> q \end{array}\right. 
+\end{align*}
 
 %But at compile time if we can determine if $i=j$  or $i\ne j$, we cat get the result of this intersection as $\{i\}$ or $\emptyset$.
 %Or else, we will leave the operation there. 
@@ -349,7 +341,7 @@ We need to perform this algorithm on all control flow paths in the original prog
 This last fact reveals a weakness of the scheme, which was already a weakness of the scalar case and related path profiling algorithms:
 the asymptotic cost of search grows with the number of control flow paths.
 This cost is exponential in the program size in the worst case.
-However, for the vast majority of reasonably structured programs, the absolute number of such paths per subprogram is not typically very large, thereby yielding reasonable compile-time costs as Section~\ref{sec:experiments} shows.
+However, for the vast majority of reasonably structured programs, the absolute number of such paths per subprogram is not typically very large, thereby yielding reasonable compile-time costs.
 
 An additional detail is that we must also retrieve all indices that appear in an array element node and subregions on the edges.
 To do so, we start another search to retrieve those index values and then combine the search result to the RG.

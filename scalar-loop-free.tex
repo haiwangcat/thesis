@@ -160,6 +160,11 @@ An edge connecting two value nodes $u$ and $v$ implies that $u$ and $v$ have the
 An edge from value node $u$ to an operation node $op$ means that  $u$ is equal to the result of evaluating $op$ with its operands. 
 To recover the value associated with node $v$, we can recursively search the graph starting at $v$.  
 
+More formally, a VSG is a graph containing two kinds of nodes: each \emph{value node} represents a distinct value in the program; each \emph{operation node} represents an operation and edges are connected with it and other value nodes, showing the equality between the result and the operation on the operands. 
+For an edge between two value nodes, it shows those two nodes contain the identical value.
+Each edge will be attached with two informations: the condition of that equality and the cost to recover the value through this equality. 
+We will discuss more details below.
+
 We attach a set of CFG paths to each edge in a value search graph, meaning the edge is applicable only if one of the CFG paths in that set is selected in the original function.
 For operation nodes in the SSA graph, let the set of paths attached to each outgoing edge be the CFG paths for which the corresponding operation is executed. 
 Similarly, for $\phi$ nodes, each reaching-definition edge should be annotated with all CFG paths for which the corresponding reaching definition reaches the $\phi$ function. 
@@ -333,7 +338,6 @@ In our search algorithm, we denote the costs of a route graph $r$ as $r.$costSet
 
 \begin{algorithm}
 \footnotesize
-\label{algorithm:search}
 \LinesNumbered
 \DontPrintSemicolon
 
@@ -450,6 +454,7 @@ In our search algorithm, we denote the costs of a route graph $r$ as $r.$costSet
 }
 
 \caption{Searching for a route graph in a value search graph}
+\label{algorithm:search}
 
 \end{algorithm}
 
@@ -558,7 +563,6 @@ Note that two branches may share the same bit if they cannot appear in the same 
 Algorithm \ref{algorithm:conditions} calculates bit-vector position for each branch node accordingly.
 
 \begin{algorithm}
-\label{algorithm:conditions}
 \DontPrintSemicolon
 
 \SetKwData{vertex}{u}
@@ -585,6 +589,7 @@ Algorithm \ref{algorithm:conditions} calculates bit-vector position for each bra
     }
 
 \caption{Generating the bit position for each branch node.}
+\label{algorithm:conditions}
 \end{algorithm}
 
 In the forward function, we use an integer as the bit vector to record all predicate results\footnote{Potentially we could omit recording predicates that do not affect the reverse function.}. 
@@ -677,9 +682,9 @@ If we use a linear-time sort, such as radix sort, for the first iteration, the o
 
 
 \begin{algorithm}
-\label{algorithm:mergeMasks}
 \DontPrintSemicolon
 \caption{Merging a set of path traces}
+\label{algorithm:mergeMasks}
 
 \SetKwFunction{mergePathMasks}{MergePathTraces}
 
@@ -772,10 +777,10 @@ Hence, if we order statements in the reverse topological order of the route grap
 
 \begin{algorithm}
 \footnotesize
-\label{algorithm:reverse-cfg}
 \LinesNumbered
 \DontPrintSemicolon
 \caption{Generating a CFG for the reverse function from a route graph.}
+\label{algorithm:reverse-cfg}
 
 
 \SetKwData{bb}{b}
@@ -921,10 +926,10 @@ Figures \ref{fig:code_example}(b) and \ref{fig:code_example}(c) show the generat
 
 
 
-\section{Experiment results}
+\subsection{Comparison to other methods}
 
 We have implemented the framework in our C/C++ source-to-source translator Backstroke based on the ROSE compiler. 
-Since this paper focuses on arbitrary control flows and basic operations with only scalar data types, instead of trying to reverse real-world code, which usually includes function calls, non-scalar data types, aliasing, etc., we employ some representative synthetic benchmarks to illustrate the power of our algorithm. Those benchmarks are listed below.
+Since this chapter focuses on arbitrary control flows and basic operations with only scalar data types, instead of trying to reverse real-world code, which usually includes function calls, non-scalar data types, aliasing, etc., we employ some representative synthetic benchmarks to illustrate the power of our algorithm. Those benchmarks are listed below.
 
 \newcommand{\NoBranch}{\textbf{NoBranch}\xspace}
 \newcommand{\Branchesa}{\textbf{Branches1}\xspace}

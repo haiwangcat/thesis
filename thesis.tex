@@ -197,13 +197,14 @@ escapeinside={\%*}{*)}          % if you want to add a comment within your code
 
 
 
-In this thesis, we consider the problem of synthesizing program inverses for imperative languages. Our primary motivation comes from optimistic parallel discrete event simulation (OPDES). There, a simulator must process events while respecting logical temporal event-ordering constraints; to extract parallelism, an OPDES simulator may speculatively execute events and only rollback execution when event-ordering violations occur. In this context, the ability to perform rollback by running time- and space-efficient reverse programs, rather than saving and restoring large amounts of state, can make OPDES more practical. Synthesizing inverses also appears in numerous other software engineering contexts, such as debugging, synthesizing ÒundoÓ code, or even generating decompressors automatically given only lossless compression code.This thesis mainly contains three chapters. In the first chapter, we focus on handling programs with only scalar data and arbitrary control flows. By building a value search graph (VSG) that represents recoverability relationships between variable values, we turn the problem of recovering previous values into a graph search one. Forward and reverse programs are generated according to the search results. For any loop that produces an output state given a particular input state, our method can synthesize an inverse loop that reconstructs the input state given the original loop's output state. The synthesis process consists of two major components: (a) building the inverse loop's body, and (b) building the inverse loop's predicate. Our method works for all natural loops, including those that take early exits (e.g., via breaks, gotos, returns). In the second chapter we extend our method to handling programs containing arrays. Based on Array SSA, we develop a modified Array SSA from which we could easily build equalities between arrays and array elements. Specifically, to represent the equality between two arrays, we employ the array subregion as the constraint. During the search those subregions will be calculated to guarantee that all array elements will be retrieved. We also develop a demand-driven method to retrieve array elements from a loop, in which each time we only try to retrieve an array element from an iteration if that element has not been modified in previous iterations. To ensure the correctness of each retrieval, the boundary conditions are created and checked at the entry and the exit of the loop. In the last chapter, we introduce several techniques of handling high-level constructs of C++ programs, including virtual functions, copying a C++ object, C++ STL containers, expressions with several side effects, inter-procedural function calls, etc. Since C++ is an object-oriented (OO) language, our discussion in this chapter can also be extended to other OO languages like Java.We have implemented our algorithm as part of a compiler framework named Backstroke, a C++ source-to-source translator based on ROSE compiler. Experimental results show that our method is effective and produces better performance than previously proposed methods.
+In this thesis, we consider the problem of synthesizing program inverses for imperative languages. Our primary motivation comes from optimistic parallel discrete event simulation (OPDES). There, a simulator must process events while respecting logical temporal event-ordering constraints; to extract parallelism, an OPDES simulator may speculatively execute events and only rollback execution when event-ordering violations occur. In this context, the ability to perform rollback by running time- and space-efficient reverse programs, rather than saving and restoring large amounts of state, can make OPDES more practical. Synthesizing inverses also appears in numerous other software engineering contexts, such as debugging, synthesizing ÒundoÓ code, or even generating decompressors automatically given only lossless compression code.This thesis mainly contains three chapters. In the first chapter, we focus on handling programs with only scalar data and arbitrary control flows. By building a value search graph (VSG) that represents recoverability relationships between variable values, we turn the problem of recovering previous values into a graph search one. Forward and reverse programs are generated according to the search results. For any loop that produces an output state given a particular input state, our method can synthesize an inverse loop that reconstructs the input state given the original loop's output state. The synthesis process consists of two major components: (a) building the inverse loop's body, and (b) building the inverse loop's predicate. Our method works for all natural loops, including those that take early exits (e.g., via breaks, gotos, returns). In the second chapter we extend our method to handling programs containing arrays. Based on Array SSA, we develop a modified Array SSA from which we could easily build equalities between arrays and array elements. Specifically, to represent the equality between two arrays, we employ the array subregion as the constraint. During the search those subregions will be calculated to guarantee that all array elements will be retrieved. We also develop a demand-driven method to retrieve array elements from a loop, in which each time we only try to retrieve an array element from an iteration if that element has not been modified in previous iterations. To ensure the correctness of each retrieval, the boundary conditions are created and checked at the entry and the exit of the loop. In the last chapter, we introduce several techniques of handling high-level constructs of C++ programs, including virtual functions, copying a C++ object, C++ STL containers, expressions with several side effects, inter-procedural function calls, etc. Since C++ is an object-oriented (OO) language, our discussion in this chapter can also be extended to other OO languages like Java.
 
 
 
 
+\begin{comment}
 
-
+We have implemented our algorithm as part of a compiler framework named Backstroke, a C++ source-to-source translator based on ROSE compiler. Experimental results show that our method is effective and produces better performance than previously proposed methods.
 
 
 
@@ -233,6 +234,9 @@ Specifically, we categorize \Program into four types: \Program with only scalars
 We will first introduce how we handle the first three cases using a bunch of compilation techniques.
 Handing programs with arrays in loops is exactly the proposed work, being introduced in the last chapter.
 
+\end{comment}
+
+
 
 \section{Related work}
 \label{sec:related-work}
@@ -244,24 +248,51 @@ Furthermore, the incremental inversion restores the initial state by restoring e
 Among the incremental inversion approaches, syntax-directed approaches apply only statement-level analysis. 
 If an assignment statement is lossless, its inverse is used: for example, the inverse of an integer increment is an integer decrement.
 Otherwise, the variable modified in the assignment has to be saved.
-An early example of syntax-directed incremental inversion is Brigg's Pascal inverter \cite{Briggs1987}. 
+It also provides the ability to record the control flows in the original program, so that in the reverse program the control flows can be reconstructed.An early example of syntax-directed incremental inversion is Brigg's Pascal inverter \cite{Briggs1987}. 
 This approach was later extended to C and applied both to optimistic discrete event simulation \cite{Carothers1999} and reversible debugging \cite{Biswas1999}.
+Because this approach does not include any program analysis, the  produced result if far from optimized. 
+It also has many restrictions.
+For example, it cannot handle unstructured programs, loops with early exits, arrays, etc..
+
 
 Akgul and Mooney introduced a more sophisticated incremental inversion algorithm that uses def-use analysis to invert some assignment statements that are not lossless \cite{Akgul2004a}; we refer to this approach as regenerative incremental inversion.
 In order to reverse a lossy assignment to the variable $a$, such as $a \leftarrow 0$, the regenerative algorithm looks for ways to recompute the previous value of $a$. 
 One technique to obtain the previous value of $a$ is to re-execute its definition; another technique is to examine all the uses of $a$ and see if its value can be retrieved from any of its uses. 
 These two techniques are applied recursively whenever a modifying operation is to be reversed; if they fail to produce a result, the overwritten variable is saved during forward execution.
-Our approach takes advantage of all the def-use relationships utilized by regenerative inversion, without suffering from the drawbacks of incremental inversion. 
+Specifically, they build a graph called modified value graph (MVG), from which they perform a simple search for a desired value.
+Our approach is inspired from their method but takes advantage of all the def-use relationships utilized by regenerative inversion, without suffering from the drawbacks of incremental inversion. 
 In addition to def-use information, our approach  also derives equality relationships between variables from the outcome of branching statements that test for equality or inequality.
 
 A related line of work is inverting programs that are injective, without using any state saving.
 Most such work focuses on inverting functional programs \cite{Abramov2002a,Gluck2005,Kawabe2005}.
-Approaches to inverting imperative programs include translation to a logic language \cite{Ross1997} and template-based generation of inverse candidates using symbolic execution \cite{Srivastava2011}.
+Approaches to inverting imperative programs include translation to a logic language \cite{Ross1997} 
+
+
+The PINS framework for program inversion \cite{Srivastava2011} is a template-based program synthesis framework.
+Rather than compiler transformations, PINS uses sketching and synthesis.
+In PINS, a programmer defines a template of the inverse with holes that a synthesizer attempts to fill in from a pool of candidates, using the underlying machinery of satisfiability (SMT) solvers.
+However, the current incarnation of PINS has weaknesses relative to our work.
+First, it is restricted to injective programs.
+Since we permit synthesis of a forward program, we can handle both injective and naturally non-injective programs.
+Secondly, it is only semi-automated, requiring both programmer annotations and templates.
+Our method is fully automated, relative to the limitations on aliasing alluded to previously.
+Thirdly, the synthesis time in PINS can be quite long and hard to predict, even for very small programs.
+Our method's transformation time is consistent with that of general traditional compilation.
+Lastly, the method does not guarantee a correctly synthesized inverse;
+one must apply a verification tool, such as a bounded model checker, to check the synthesized result.
+Our method produces correct inverses by construction.
+
 
 
 \section{Limitations}
 
 Most discussions in this thesis don't target any specific languages, but our method has several limitations.
+Our method cannot handle programs with aliasing, and hence excludes some data structures like linked data structures. 
+We will not apply any inter-procedural  analysis in our method. 
+For any function calls in the programs, we just assume there is no aliasing in the callee. 
+In the last chapter, we will discuss several strategies to handle function calls.
+On the specific language level, in the last chapter we will discuss how to handle some C++ constructs, but we don't deal with all C++ language features.
+Those C++ features we cannot handle are listed below.
 
 \paragraph{Aliasing} Aliasing commonly exists in almost all imperative languages.
 In C++, aliases are brought by pointers and references, where specific data may be referenced by more than one pointers or references, and at compile time it is usually very difficult or even impossible to resolve all those aliases.
@@ -273,21 +304,39 @@ Therefore, we won't discuss aliasing in this thesis and will assume there is no 
 
 \paragraph{Subset of C++ language} 
 
+We only handle a subset features of C++ language and those we cannot handle mainly include:
+
+\begin{itemize}
+\item Dynamic memory allocation and release.
+\item I/O and system calls.
+\item Exception handling.
+\item Template classes and functions.
+\item Function pointers.
+\end{itemize}
+
+
 \section{Preliminaries}
 
-\subsection{Static Single Assignment Form (SSA)}
+\paragraph{Static Single Assignment Form (SSA)}
 
 SSA is a commonly used intermediate representation in compilers to speed up data flow analysis \cite{Cytron1991}. 
 For programs in SSA form, variables are versioned so that each variable with a specific version has exactly one reaching definition. 
 Where distinct definitions of a variable merge at confluence points in the control flow graph (CFG), a $\phi$ function is introduced to merge each of the reaching definitions at that point, and this $\phi$ function is also treated as a new definition. SSA has been successfully applied to many compiler analyses. 
 
-\subsection{SSA Graph}
+\paragraph{SSA Graph}
 
  An SSA graph \cite{Alpern1988}\cite{Cooper2001}, built based on SSA form, consists of vertices representing operators, function symbols, or $\phi$ functions, and directed edges connecting uses to definitions of values. It shows data dependences between values in a program.
 
 
 
 \chapter{Synthesis for programs with only scalars}
+
+In this chapter we will setup the program we are handling and introduce the framework of our method, which will also be used in the following chapters.
+As the first step, we will discuss how to handle programs with only scalars and arbitrary control flows. 
+Two important intermediate representations will be introduces: a \emph{value search graph} represents all equality relations in the program, and a \emph{route graph} shows the data dependences in the reverse graph which is built as the search result on a value search graph.
+In addition, we will first consider loop-free programs, as its control flow paths are finite and much easier to represent. 
+For programs with loops, we will treat each loop body as a subprogram so that we can apply the same approach to handling loop-free programs.
+ 
 
 
 %============================================================
@@ -308,15 +357,14 @@ Where distinct definitions of a variable merge at confluence points in the contr
 \chapter{Synthesis for programs with arrays}
 \label{chapter:arrays-loop-free}
 
-\TODO{To be revised}
 In this chapter, we extend the previous method to handling arrays in both loop-free programs and those with loops.
-
-There are two motivations of it: in optimistic  parallel discrete event simulation, if we can avoid performing state saving on an array that is modified in a loop and can be retrieved by another loop in the reverse program, the performance will be improved; 
-we also consider to generate the inverse for injective programs, such as lossless compression and encryption,  when state saving is not allowed (because the program is already injective or reversible, it is not necessary to generate a forward program). 
-
-Arrays are a particularly important case: naively saving the entire array too frequently will be very expensive in space and time. Our method permits saving of just the elements that have changed, and better yet, can often use cheaper computation in place of state saving.
-
-To build the VSG for arrays, we apply a modified Array SSA based on \cite{}, and define several special VSG nodes for arrays. 
+We will still use the same framework. 
+That is, we will build a VSG for the program with arrays, then perform a search on it to build a RG.
+Then we translate the RG into the source code.
+%There are two motivations for us to handle arrays: in OPDES, storing an array is very expensive. We need to improve the performance by using as less state savings as possible on arrays. If we can avoid performing state saving on an array that is modified in a loop and can be retrieved by another loop in the reverse program, the performance will be improved; 
+%we also consider to generate the inverse for injective programs, such as lossless compression and encryption,  when state saving is not allowed (because the program is already injective or reversible, it is not necessary to generate a forward program). 
+%Arrays are a particularly important case: naively saving the entire array too frequently will be very expensive in space and time. Our method permits saving of just the elements that have changed, and better yet, can often use cheaper computation in place of state saving.
+To build the VSG for arrays, we apply a modified Array SSA based on \cite{rus2006scalable}, and define several special VSG nodes for arrays. 
 To represent the equality between two arrays, we employ the array subregion as the constraint. 
 During the search those subregions will be calculated to guarantee that all array elements will be retrieved. We also develop a demand-driven method to retrieve array elements from a loop. 
 
@@ -627,12 +675,13 @@ In the generated code, we always perform a state saving on $a_1[j]$.
 \section{Handling linked data structures}
 \label{linked-data-structure}
 
-A linked data structure contains elements which have one or more ``links'' to other elements such that each element could exist in separate memory place from others, comparing to arrays whose elements are always stored together.
+A linked data structure contains elements which have one or more ``links'' to other elements such that each element could reside in separate memory place from others, comparing to arrays whose elements are always stored together.
 Typical linked data structures include linked list, tree, graph, etc..
 Since an element can be linked by several links from other elements, aliasing prevalently exists among linked data structures.
+But this is similar to the aliasing brought by indices in arrays.
 
-If we treat links as indices in arrays, it is possible to handle those linked data structures using the method we developed for arrays.
-Let's take the linked list (we will call it as list briefly) for an example.
+If we treat the address (normally saved in links) of elements in linked data structure as indices in arrays, it is possible to handle those linked data structures using the method we developed for arrays.
+Let's take the linked list (we will call it as list briefly) as an example.
 Let $Node$ define a node in the list and its definition is shown below:
 
 
@@ -643,31 +692,35 @@ struct Node {
 };
 \end{lstlisting}
 
- \begin{flalign*} 
- & struct \;  Node \; \{ \\
- & \;\;\;\;  int \; val; \\
- & \;\;\;\; Node* \; next; \\
- & \}; \\
- & Node* \; head; \\
- & while\; (head \; != \; NULL)\;\{ \\
- & \;\;\;\; head->val++;\\
- &\;\;\;\; head = head->next;\\
- &\}
- \end{flalign*} 
+Now suppose we have a list and would like to increment the value in each node by one. 
+The code should look like this:
 
-In the code above, we can treat $val$ and $next$ as two arrays, then the loop will be transformed as the code below:
- \begin{flalign*} 
- & while\; (head \; != \; NULL)\;\{ \\
- & \;\;\;\; val[head]++;\\
- &\;\;\;\; head = next[head];\\
- &\}
- \end{flalign*} 
+\begin{lstlisting}
+void increment(Node* n) {
+    while (n != NULL) {
+        n->val++;
+        n = n->next;
+    }
+}
+\end{lstlisting}
+
+Then we perform a transformation on this code by taking each field of $Node$ as an array and the address of the node as the index.
+Here we create two new arrays: $val$ and $next$.
+Whenever we access the field with the same name by an instance of $Node$, we transform it into an access to an array.
+That is, for $n\to val$ we get $val[n]$.
+The transformed code is shown below:
+
+\begin{lstlisting}
+void increment(Node* n) {
+    while (n != NULL) {
+        val[n]++;
+        n = next[n];
+    }
+}
+\end{lstlisting}
  
 However, unlike the index of an arrays that may have regular access patterns, we usually don't have enough information of the pointers pointing to linked data structures. 
-We will try to find out in which situation or under what conditions can we handle them.
-
-
-
+We may use some high-level semantics like during the traversal of a list, each element only appear at most once (otherwise a cycle will exist in the list which breaks the definition of it). 
 
 \chapter{Synthesis for C++ programs}
 
@@ -683,11 +736,14 @@ third, initially Backstroke is used to generate reverse functions for OPDES even
 Backstroke is a source-to-source translator.
 It is based on ROSE,  which is a C++ source-to-source compiler. 
 The ROSE compiler parses the source code and transform it into an abstract syntax tree (AST) as the intermediate representation (IR).
-Since the target code is also source code, the AST preserves almost all syntax informations on source level of the source code, such that it can reproduce the similar code as the input together with the transformations as desired.
-But it is not sufficient for some low level analysis, where other IRs like three address code will do better work.
-%However, no further IR like three address code is generated after that, making it difficult to build some constructs relying on low level IRs. 
+The AST preserves almost all syntax informations on source level of the source code, such that it can reproduce the similar code as the input together with the transformations as desired.
+But it is not sufficient for some low level analysis, where other IRs like three address code, in which each statement only has one operation with at most three operands, is easier to analyze.
+As seen in the prior two chapters, our method heavily depends on SSA form.
+Building the SSA form on source code is challenging, as the source may contain complex statements or expressions.
 
-Our method heavily depends on SSA form, and building it on source code is challenging, as the source may contain complex statements or expressions.
+To amortize those problems, given an input program, we will firstly normalize it into another form without changing the behavior of the original program.
+We will break some complex expressions or statements into simpler ones, and try to let each statement only have one side effect.
+Then the data flow analysis including SSA form can be easily generated.
 In addition, because the forward program is generated by instrumenting state saving and path recording statements in the original program, normalizing the program can make it easier to find those instrumentation locations in the program. 
 %Therefore, before we generate the SSA form, we first normalize the AST into a regular one.
 
@@ -713,6 +769,87 @@ This is called \emph{short-circuit evaluation}.
 
 \end{itemize}
 
+For other expressions with several side effects, their order is undefined. 
+For example, if we have $++a = ++b$, the resulted value of $a$ can be either $b$ or $b+1$.
+Although there is no syntax error in this expression, it may bring some problems for our data flow analysis.
+To remove this ambiguity, we transform this kind of expression into several ones and force an execution order.
+The new expression will be $++a, ++b,  a = b$, in which the comma expressions form a specific execution order of all three side effects.
+
+
+
+
+\subsection{Facilitating instrumentations}
+
+A forward program is always generated by instrumenting the original program with state saving and path recording statements.
+We have to find the proper place to make the instrumentations.
+However, some C++ constructs make it a little difficult to find such a place.
+
+Take the logical and operator as an example.
+The evaluation of a logical and operation follows the short-circuit rule: if the operand on the left hand side is evaluated as $false$, then the operand on the right hand side will not be evaluated.
+Actually, such an operator implicitly creates additional control flow paths to the program, and during path recording we also have to count those paths, especially if there exists side effects in either operand. 
+
+Below is an example showing this situation.
+
+\begin{lstlisting}
+if (a > 0 && b++ > c)
+    /* true body */
+else
+    /* false body */
+\end{lstlisting}
+
+The CFG of it is shown in Figure~\ref{Fig:ShortCircuitCFG}.
+During the path recording, we may have to insert a statement on the dashed edge in this CFG, which is a critical edge (an edge which is neither the only edge leaving its source block, nor the only edge entering its destination block).
+However, at the source level it is very difficult to insert a statement on this edge.
+
+
+\Drawgraph{
+    \node [array,font=\small] (2) at (0,-2) {\texttt{if (a > 0)}};
+    \node [array,font=\small] (3) at (0,-4) {\texttt{if (b++ > c)}};
+    \node [array,font=\small] (4) at (-2,-6) {\texttt{/* true body */}};
+    \node [array,font=\small] (5) at (2,-6) {\texttt{/* false body */}};
+    \path
+    (2) edge [post] node  [lbl,swap,yshift=-3] {T}(3)
+    (2) edge [post, bend left] node  [lbl,yshift=-3] {F}(5)
+    (3) edge [post, dashed] node  [lbl,yshift=-3] {F}(5)
+    (3) edge [post]  node  [lbl,swap,yshift=-3] {T}(4)
+    ;
+}{The CFG for a logical and operation \texttt{a > 0 \&\& b++ > c} as a predicate.}{Fig:ShortCircuitCFG}
+
+Our solution is first converting such an operator into a conditional operator, which will be converted into conditional statements later.
+We convert logical and \& or operations into conditional operation according to the rules as below:
+$$expr1 \;\&\&\; expr2  \;\to\;  expr1 \;?\; expr2 : false$$
+$$expr1 \;||\; expr2  \;\to\;  expr1 \;?\; true : expr2$$
+
+For a conditional operator as a predicate, we will declare a new boolean variable, then assign the result of the conditional operation to it.
+Consequently, the code above becomes:
+
+\begin{lstlisting}
+bool f = a > 0 ? b++ > c : false;
+if (f)
+    /* true body */
+else
+    /* false body */
+\end{lstlisting}
+
+We then go ahead convert the conditional operator into a conditional if statement, and separate the statement $f = b++>c$ into two statements such that each statement only contains one side effect:
+
+\begin{lstlisting}
+bool f;
+if (a > 0) {
+    f = b > c;
+    b++;
+}
+else
+    f = false;
+if (f)
+    /* true body */
+else
+    /* false body */
+\end{lstlisting}
+
+Now the code is much cleaner and instrumentations are easier to made to it.
+Note that after this conversion, we get one more control flow path which is a infeasible path (the path passing through the false body of the first branch and the true body of the second branch).
+This is fine as the behavior of the program is not changed.
 
 
 \section{State savings on C++ variables}
@@ -720,108 +857,159 @@ This is called \emph{short-circuit evaluation}.
 In the prior chapters, when we need a state saving, we normally call two functions: $store$ and $restore$.
 But what is behind those two function calls?
 In this section, we will introduce how and where to store variables in Backstroke.
-Besides variable of basic types, we will discuss how to store a C++ object correctly, including the case where polymorphism exists.
+Besides variables of basic types, we will also discuss how to correctly store a C++ object with class type, including the case where the object is referenced by a pointer or reference of its superclass type.
 
 \subsection{The storage stack}
 
-To perform state savings, we need a space and also some interfaces to perform the storing and restoring operations. 
-Since Backstroke performs incremental state savings, the names and number of variables to be stored and the size of space needed are unknown at compile time.
-Therefore, we have to use a runtime data structure as the storage.
-In Backstroke, we use a stack that stores all variables in all programs.
-Since stack is a LIFO (last-in-first-out) data structure, a variable that is firstly saved and pushed will be popped at last. 
-And during the OPDES, reverse events are also implemented in a LIFO order (the first reverse event is used to remove the side effects produced by the last forward event). 
-Therefore we only need one stack for all event handlers.
+To perform state savings, we need a storage container that provides interfaces to perform the storing and restoring operations. 
+Since the state saving made by Backstroke is incremental, the names and number of variables to be stored and the size of space needed are unknown at compile time.
+Therefore, in Backstroke we use a stack that stores all variables.
+As stack is a LIFO (last-in-first-out) data structure, a variable that is firstly saved and pushed will be popped at last. 
+And during the OPDES, reverse events are also implemented in a LIFO order (the first reverse event is used to remove the side effects produced by the last forward event in the sequence). 
+Hence stack is the right container to store variables and we only need one stack for all event handlers.
 
 To let our stack hold variables of arbitrary types, one way in C++ is that for each variable we store a pointer of \texttt{void *} type pointing to the copy of the variable, and during the restoration, the referenced variable should be casted to the proper type.
 However, when a great number of variables are stored, the memories possessing their copies may be scattered, and for each variable an additional size information is needed in the heap memory and is usually attached to the memory containing the variable, which can bring significant time and space overhead.
-To amortize this overhead, we could use a memory pool that allocates memories to stored variables. 
-
-In our simulation programs, we observed that most stored variables are of basic types like integers and floating points.
+To amortize this overhead, we could use a memory pool that allocates memories to stored variables. In addition, we also observed that most stored variables are of basic types like integers and floating points.
 To decrease the memory used to store those variables, we create several special stacks which are used to store variables of basic types. 
 
+The storage stack should also provide an interface to clear the items inside.
+We can do this by popping all items and release the memory for each item.
+However, in some scenarios, instead of clear all items, we may only want to remove some old items but keep new ones, when it is more convenient if we can access the stack from both ends.
+In Backstroke, our storage stack has the type \texttt{std::deque<void*>}, which is a double-ended queue that satisfies our needs.
+The function $store()$ and $restore()$ are defined as below:
+
+\begin{lstlisting}
+std::deque<void*> storageStack;
+
+template<class T>
+void store(const T& obj) {
+    storageStack.push_back(new T(obj));
+}
+
+template<class T>
+void restore(T& obj) {
+    T* t = static_cast<T*>(storageStack.back());
+    storageStack.pop_back();
+    obj = *t;
+    delete t;
+}
+\end{lstlisting}
 
 \subsection{Storing C++ objects}
 
 For a variable with basic types or POD (plain old data) types, there are no side effects when copying it during state savings.
-However, for a C++ object of a class type, its copy constructor and assignment operator are triggered when storing and restoring it.
-Backstroke requires that those two functions should be defined ``correctly''.
-Here we discuss the correctness of those two functions.
+However, for a C++ object of class type, its copy constructor, assignment operator, and destructor (we will call them \emph{big three functions} below) are triggered when storing and restoring it.
+Backstroke requires that those big three functions should be defined ``correctly''.
+Here we discuss the correctness of them.
 
-Given an object $obj$ of type $class \;S$ in the original program, if it is stored and restored in the forward and reverse programs, we have to make sure the state remains unchanged after running the reverse program as it before running the  forward program.
-We store an object by calling its copy constructor to create a copy of it which is stored in our stack based storage. 
+Given an object $obj$ of type $class \;S$ in the original program, if it is stored and restored in the forward and reverse programs, we have to make sure the state is recovered  after running the reverse program with subject of that  before running the  forward program.
+We store an object by calling its copy constructor to create a copy of it which is stored in our storage stack. 
 We don't use assignment operator here because the class of the object may not have a default constructor, in which case creating an object is not that straight forward.
-When we restore that object, normally the object is already there, and we will assign the stored one to it using assignment operator. 
-After the restoration, we delete the stored object that calls the destructor of it.
+When we restore this object, normally the object is already there, and we can just assign the copy to it using the assignment operator. 
+After the restoration, we delete the stored object that calls its destructor.
 We should guarantee that after storing and restoring an object the simulation state is correctly rolled back.
-Suppose we have an object $obj$ with type $T*$, then the code below shows how we store it:
+Below are the $store()$ and $restore()$ implementations as shown before with comments showing when those three functions are called.
+
 
 \begin{lstlisting}
-T* objCopy = new T(*obj);  // The copy constructor is called.
-storageStack.push(objCopy);
+template<class T>
+void store(const T& obj) {
+    storageStack.push_back(new T(obj));  // The copy constructor is called.
+}
+
+template<class T>
+void restore(T& obj) {
+    T* t = static_cast<T*>(storageStack.back());
+    storageStack.pop_back();
+    obj = *t;  // The assignment operator is called.
+    delete t;  // The destructor is called.
+}
 \end{lstlisting}
 
-The code below shows how we restore this object:
 
-\begin{lstlisting}
-T* objCopy = storageStack.top();
-storageStack.pop();
-*obj = *objCopy;  // The assignment operator is called.
-delete objCopy;  // The destructor is called.
-\end{lstlisting}
-
-We require that there is no side effect in the copy constructor, the assignment  operator, and the destructor. 
+To guarantee the correctness, we require that there is no side effect in the big three functions. 
 For instance, each of them should not modify a global or static shared variable that belongs to the simulation state and could affect the simulation result. 
 In addition, the copy constructor and assignment operator usually should make a deep copy of the object.
 This means if this object has a pointer pointing to another chunk of memory that is managed by this object, this piece of memory should also be copied in those two functions, and it needs to be released in the destructor. 
 A good example is \texttt{std::vector}, whose copy constructor and assignment operator both make a deep copy of the array inside.
+However, this requirement may be too strong as sometimes it could conflict with the  behavior of the original program. 
+An apparent situation is that the copy constructor does not alway make a deep copy of itself when several instances of this class have links to the same data and any one can update it. 
+If the copy constructor makes a deep copy, the behavior of the program would be changed.
+In the next part we will propose a new method to handle this drawback.
 
 
-\subsection{Handling polymorphism}
-Polymorphism is possibly the most important Object-Oriented (OO) feature in C++ and other OO languages. 
+
+\subsection{Storing an object referenced by a pointer/reference with its superclass type}
+%Polymorphism is possibly the most important Object-Oriented (OO) feature in C++ and other OO languages. 
 %\TODO{need a definition of polymorphism}
-In C++, an object with a pointer or reference type $T$ may have a concrete type $S$ which is a subclass of $T$.
+In C++, an object with a pointer or reference type $Base$ may have a concrete type $Sub$ which is a subclass of $Base$.
 However, at compile time, it is impossible to identify the real type of such an object.
-As a result, calling the copy constructor of the type $T$ will not do the whole copy of that object, but only a part of it that belongs to the type $T$ only.
-This will lead to the error in state savings.
-A virtual copy constructor helps, but it is not permitted in C++.
-The same situation happens on assignment operator, which also cannot be virtual.
-Among the three functions, only the destructor can be declared as a virtual function.
+As a result, calling the copy constructor of the $Base$ class will not do the whole copy of that object, but only a part of it that belongs to the type $Base$ only.
+This will lead to the error in state savings as shown below:
 
-To get rid of this restrict of C++ language, we can define our own virtual versions of the copy constructor and assignment operator. 
-Specifically, we require that the class $T$ should provide two special interfaces as virtual functions: a $clone$ function that returns a copy of the object, and a $assign$ function that assigns itself to another object.
+
+\begin{lstlisting}
+class Base {
+    int baseVal;
+};
+
+class Sub : public Base {
+    int subVal;
+};
+
+Base *p = new Sub;
+store(*p);  // Error! Only p->baseVal is stored.
+\end{lstlisting}
+
+
+Polymorphism is the solution to this problem.
+What we need is the virtual versions of the big three functions.
+However, in C++ only the destructor can be declared as a virtual function.
+
+To get rid of this restriction, we can define our own virtual versions of the three big functions. 
+Specifically, we require that the class $Base$ should provide two special interfaces as virtual functions: a $clone$ function that returns a copy of the object; an $assign$ function that assigns itself to another object.
 
 
 \begin{lstlisting}
 class T {
 public:
-    virtual T* __clone__();
-    virtual void __assign__(T* obj);
-    virtual ~T();
+    virtual T* clone();
+    virtual void assign(T* obj);
 };
 
 class S : public T {
 public:
-    virtual T* __clone__()
+    virtual T* clone()
     { return new S(*this); }
-    virtual void __assign__(T* obj)
+    virtual void assign(T* obj)
     {  *this = *(dynamic_cast<S*>(obj)); }
-    virtual ~S();
 };
 \end{lstlisting}
 
-\begin{lstlisting}
-T* objCopy = obj->__clone__();  // The virtual copy function is called.
-storageStack.push(objCopy);
-\end{lstlisting}
+There are two  advantages of those two new interfaces:
+first, they are provided as the complementary interfaces to the classes in the original program and hence will not change its behavior, and when the original big three functions cannot fulfill our requirement, we can always defines those two virtual   functions;
+second, in this way we could  correctly store an object referenced by a pointer or reference of its superclass.
+
+The code below shows the new $store$ and $restore$ functions using the new interfaces.
 
 \begin{lstlisting}
-T* objCopy = storageStack.top();
-storageStack.pop();
-obj->__assign__(objCopy);  // The virtual assignment function is called.
-delete objCopy;  // The virtual destructor is called.
+template<class T>
+void store(const T& obj) {
+    storageStack.push_back(obj.clone());  // The virtual copy constructor is called.
+}
+
+template<class T>
+void restore(T& obj) {
+    T* t = static_cast<T*>(storageStack.back());
+    storageStack.pop_back();
+    obj.assign(*t);  // The virtual assignment operator is called.
+    delete t;  // The destructor is called.
+}
 \end{lstlisting}
 
-
+Note that it is possible that the original destructor could not release all resources generated by the $clone()$ function. 
+In this case, the $assign()$ function should release those resources so that after running $assign()$ and destructor, all resources generated by $clone()$  will be safely released.
 
 
 \section{Handling function calls}
@@ -864,9 +1052,7 @@ We additionally add edges from $a$ to $foo()A^-$, $b$ to $foo()B^-$, $foo()A^-$ 
 This allows us to make independent decisions when generating the reverse code for each parameter of $foo()$.
 
 
-
-\section{Handling virtual functions}
-
+%\section{Handling virtual functions}
 
 
 \section{Handling STL containers}
@@ -888,7 +1074,7 @@ In this section, we propose a method to ``undo'' some modifications on STL conta
 
 
 As a basic example, let take a look at the most commonly used STL container: \stlvector. 
-A \stlvector works like an array, except its size can by adjusted dynamically at runtime.
+A \stlvector behaves like an array, except its size can by adjusted dynamically at runtime.
 It has an interface named \pushback which adds an element to the end of the vector, and hence the size of it is incremented by one. 
 If a vector as a state variable is changed in this way, it is apparent that we can call its another interface \popback to undo this modification -  a much more efficient way than state saving. 
 Now let's consider how to undo a \popback. 
@@ -909,13 +1095,13 @@ inline void bs_vector_push_back_reverse(std::vector<T>& v) {
 }
 template <class T>
 inline void bs_vector_pop_back_forward(std::vector<T>& v) {
-    __store__(v.back());
+    store(v.back());
     v.pop_back();
 }
 template <class T>
 inline void bs_vector_pop_back_reverse(std::vector<T>& v) {
     T t;
-    __restore__(t);
+    restore(t);
     v.push_back(t);
 }
 \end{lstlisting}
@@ -928,40 +1114,32 @@ Hence it is impossible to write ``cheap''  reverse functions for \push and \pop.
 But an \stlqueue actually contains a real container inside, and the default one is a \stldeque, which has more interfaces that we need.
 Therefore, we can simply change the \stlqueue into a \stldeque then use the forward/reverse functions of it. 
 
-The table below shows all STL containers with their interfaces which Backstroke would generate better forward/reverse functions that storing the whole container.
+The Table~\ref{table:stl} shows how we generate the forward and reverse code for common STL containers and their interfaces.
 
+\begin{table}
 \begin{center}
-    \begin{tabular}{ | p {4cm} | p {10cm} | }
+    \begin{tabular}{ | p {4cm} | p {5cm} | p {5cm} |}
     \hline
-    STL container \& interface & how 
+    STL container \& interface & Forward Code & Reverse Code
     \\ \hline
-	vector::push\_back & do it
+	vector::push\_back() deque::push\_back() list::push\_back() & Call push\_back(). & Call pop\_back().
     \\ \hline
-    vector::pop\_back & do it
+    vector::pop\_back() deque::pop\_back() list::pop\_back() & Store the popped element, and then call pop\_back() & Restore the saved element and call push\_back() to push it to the vector.
     \\ \hline
-    vector::insert & do it
+    vector::insert() deque::insert() list::insert()& Store the index/iterator of the element to be inserted and call insert() & Remove the element with the saved index/iterator by calling erase().
     \\ \hline
-    vector::erase & do it
+    vector::erase() deque::erase() list::erase & Store the element to be erased and its position, then call erase(). & Restored the erased element and insert it to the saved position.
     \\ \hline
-    deque::push\_back & do it
+    set::insert() map::insert() & Call insert() and store the iterator of the inserted element. & Remove the stored element by calling erase().
     \\ \hline
-    deque::push\_back & do it
-    \\ \hline
-    deque::push\_back & do it
-    \\ \hline
-    deque::push\_back & do it
-    \\ \hline
-    deque::push\_back & do it
-    \\ \hline
-    deque::push\_back & do it
-    \\ \hline
-    deque::push\_back & do it
-    \\ \hline
-    deque::push\_back & do it
+    set::erase() map::erase() & Store the element to be erased can call erase(). & Insert the stored element by calling insert().
     \\ \hline
 
     \end{tabular}
 \end{center}
+\caption{The forward and reverse methods for some interfaces of STL containers}
+\label{table:stl}
+\end{table}
 
 \bibliography{biblib2,more2,library2,biblib,more,library}
 

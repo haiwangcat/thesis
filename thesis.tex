@@ -52,13 +52,11 @@ escapeinside={\%*}{*)}          % if you want to add a comment within your code
 %% to the department defined above and Institution defaults to Georgia
 %% Institute of Technology.
 
-\principaladvisor{Professor Richard Vuduc}
-\committeechair{Professor Richard Fujimoto}
-\firstreader{Professor General Reference}[School of Mathematics]
-\secondreader{Professor Ivory Insular}[Department of Computer Science and Operations Research][North Dakota State University]
-\thirdreader{Professor Earl Grey}
-\fourthreader{Professor John Smith}
-\fifthreader{Professor Jane Doe}[Another Department With a Long Name][Another Institution]
+\principaladvisor{Professor Richard Vuduc}[School of Computational Science and Engineering]
+\firstreader{Professor Richard Fujimoto}[School of Computational Science and Engineering]
+\secondreader{Professor Santosh Pande}[School of Computer Science]
+\thirdreader{Doctor Daniel Quinlan}[Center for Applied Scientific Computing][Lawrence Livermore National Laboratory]
+\fourthreader{Doctor David Jefferson}[Center for Applied Scientific Computing][Lawrence Livermore National Laboratory]
 %\setcounter{secnumdepth}{2}
 \degree{Doctor of Philosophy}
 
@@ -70,14 +68,14 @@ escapeinside={\%*}{*)}          % if you want to add a comment within your code
 %% \major{Algorithms, Combinatorics, and Optimization} 
 
 \copyrightyear{2013}
-\submitdate{April 2013} % Must be the month and year of graduation,
+\submitdate{May 2013} % Must be the month and year of graduation,
                          % not thesis approval! As of 2010, this means
                          % this text must be May, August, or December
                          % followed by the year.
 
 %% The date the last committee member signs the thesis form. Printed
 %% on the approval page.
-\approveddate{1 March 2013}
+\approveddate{1 May 2013}
 
 \bibfiles{example-thesis}
 
@@ -198,13 +196,13 @@ escapeinside={\%*}{*)}          % if you want to add a comment within your code
 
 
 In this thesis, we consider the problem of synthesizing program inverses for imperative languages. 
-Specifically, we will build a compiler framework named \emph{Backstroke} that can generate a reversible  program and an inverse program for a given input program, by employing several intermediate representations and  program analyses.   
+Specifically, we will build a compiler framework named \emph{Backstroke} \cite{vulov2011backstroke} that can generate a reversible  program and an inverse program for a given input program, by employing several intermediate representations and  program analyses.   
 
-Our primary motivation comes from optimistic parallel discrete event simulation (OPDES). There, a simulator must process events while respecting logical temporal event-ordering constraints; to extract parallelism, an OPDES simulator may speculatively execute events and only rollback execution when event-ordering violations occur. In this context, the ability to perform rollback by running time- and space-efficient reverse programs, rather than saving and restoring large amounts of state, can make OPDES more practical. Synthesizing inverses also appears in numerous other software engineering contexts, such as debugging, synthesizing “undo” code, or even generating decompressors automatically given only lossless compression code.
+Our primary motivation comes from optimistic parallel discrete event simulation (OPDES). There, a simulator must process events while respecting logical temporal event-ordering constraints; to extract parallelism, an OPDES simulator may speculatively execute events and only rollback execution when event-ordering violations occur \cite{jefferson1985virtual}. In this context, the ability to perform rollback by running time- and space-efficient reverse programs, rather than saving and restoring large amounts of state, can make OPDES more practical. Synthesizing inverses also appears in numerous other software engineering contexts, such as debugging, synthesizing “undo” code, or even generating decompressors automatically given only lossless compression code.
 
 This thesis mainly contains three chapters. In the first chapter, we focus on handling programs with only scalar data and arbitrary control flows. By building a value search graph (VSG) that represents recoverability relationships between variable values, we turn the problem of recovering previous values into a graph search one. Forward and reverse programs are generated according to the search results. For any loop that produces an output state given a particular input state, our method can synthesize an inverse loop that reconstructs the input state given the original loop's output state. The synthesis process consists of two major components: (a) building the inverse loop's body, and (b) building the inverse loop's predicate. Our method works for all natural loops, including those that take early exits (e.g., via breaks, gotos, returns). 
 
-In the second chapter we extend our method to handling programs containing arrays. Based on Array SSA, we develop a modified Array SSA from which we could easily build equalities between arrays and array elements. Specifically, to represent the equality between two arrays, we employ the array subregion as the constraint. During the search those subregions will be calculated to guarantee that all array elements will be retrieved. We also develop a demand-driven method to retrieve array elements from a loop, in which each time we only try to retrieve an array element from an iteration if that element has not been modified in previous iterations. To ensure the correctness of each retrieval, the boundary conditions are created and checked at the entry and the exit of the loop. 
+In the second chapter we extend our method to handling programs containing arrays. Based on Array SSA \cite{rus2006scalable}, we develop a modified Array SSA from which we could easily build equalities between arrays and array elements. Specifically, to represent the equality between two arrays, we employ the array subregion as the constraint. During the search those subregions will be calculated to guarantee that all array elements will be retrieved. We also develop a demand-driven method to retrieve array elements from a loop, in which each time we only try to retrieve an array element from an iteration if that element has not been modified in previous iterations. To ensure the correctness of each retrieval, the boundary conditions are created and checked at the entry and the exit of the loop. 
 
 In the last chapter, we introduce several techniques of handling high-level constructs of C++ programs, including virtual functions, copying a C++ object, C++ STL containers, expressions with several side effects, inter-procedural function calls, etc. Since C++ is an object-oriented (OO) language, our discussion in this chapter can also be extended to other OO languages like Java.
 
@@ -318,7 +316,7 @@ Those C++ features we cannot handle are listed below.
 In C++, aliases are brought by pointers and references, where specific data may be referenced by more than one pointers or references, and at compile time it is usually very difficult or even impossible to resolve all those aliases.
 In addition, the inter-procedural analysis is also heavily depending on aliasing analysis, as procedure calls usually have parameters passed by references.
 
-Our method heavily depends on an intermediate representation called \emph{Static Single Assignment (SSA)}, and it is difficult to build it for programs with aliasing. 
+Our method heavily depends on an intermediate representation called \emph{Static Single Assignment (SSA)} \cite{cytron1991efficiently}, and it is difficult to build it for programs with aliasing. 
 Our compiler also lacks of well formed aliasing analysis framework.
 Therefore, we won't discuss aliasing in this thesis and will assume there is no aliasing in the programs we handle. 
 
@@ -770,9 +768,9 @@ We may use some high-level semantics like during the traversal of a list, each e
 In prior chapters, we target programs in no specific languages, as our method is general and can be applied on any imperative language.
 In this chapter, we introduce some techniques of handling several high-level constructs of C++ programs. 
 We choose C++ for three reasons:
-first, Backstroke is based on ROSE compiler, which is a C++ source-to-source compiler; 
+first, Backstroke is based on ROSE compiler \cite{quinlan2000rose}, which is a C++ source-to-source compiler; 
 second, C++ is an object-oriented (OO) language, and our discussion in this chapter can also be extended to other OO languages like Java;
-third, initially Backstroke is used to generate reverse functions for OPDES events, and our  simulation engines (GTNets and ROSS) are writing in C/C++.
+third, initially Backstroke is used to generate reverse functions for OPDES events, and our  simulation engines (GTNets \cite{riley2003simulation} and ROSS \cite{carothers2002ross}) are writing in C/C++.
 
 \section{Normalizing C++ programs}
 

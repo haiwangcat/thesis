@@ -220,30 +220,52 @@ For example, if statements $s_{1} s_{2} \dots s_{n}$ are executed in the forward
 The incremental approach cannot handle unstructured control flows and is difficult to apply with early returns from functions; the approach presented in this thesis suffers from neither of these shortcomings.  
 Furthermore, the incremental inversion restores the initial state by restoring every intermediate program state between the final state and the initial state, even though these states are not needed
 
-Among the incremental inversion approaches, syntax-directed approaches apply only statement-level analysis. 
+\paragraph{Syntax-directed approaches} Among the incremental inversion approaches, syntax-directed approaches apply only statement-level analysis. 
 If an assignment statement is lossless, its inverse is used: for example, the inverse of an integer increment is an integer decrement.
 Otherwise, the variable modified in the assignment has to be saved.
-It also provides the ability to record the control flows in the original program, so that in the reverse program the control flows can be reconstructed.An early example of syntax-directed incremental inversion is Brigg's Pascal inverter \cite{Briggs1987}. 
+It also provides the ability to record the control flows in the original program, so that in the reverse program the control flows can be reconstructed. An early example of syntax-directed incremental inversion is Brigg's Pascal inverter \cite{Briggs1987}. 
 This approach was later extended to C and applied both to optimistic discrete event simulation \cite{Carothers1999} and reversible debugging \cite{Biswas1999}.
 Because this approach does not include any program analysis, the  produced result if far from optimized. 
 It also has many restrictions.
 For example, it cannot handle unstructured programs, loops with early exits, arrays, etc..
 
+Here let's look at the RCC (Reverse C Compiler) compiler developed by \cite{Carothers1999}.
+In their method, if a state variable is modified by a constructive operation like \texttt{++} or \texttt{+=}, then in the reverse program that state variable can be recovered without state saving. 
+For example, if the state variable \texttt{s} is modified by \texttt{s += t}, then it can be recovered by \texttt{s -= t}.
+Otherwise, the state saving will be performed to that state variable before it is modified in the forward program. 
+The RCC relies on that all statements in the original program contain simple expressions, and the program is structured. 
+Because no program analysis is involved, the generated result may be far from optimized.
+For example, a state variable may be modified several times in the program, in which case one state saving is enough before its first modification to recover that value. 
+But RCC may insert several state saving statements that consume more memory space.
+Instead, thanks to the program analysis, in our method this state variable is only stored once.
+In addition, RCC tries to recover every variable that is modified in the original program, which may lead to lots of unnecessary recoveries that is not related to state variables, but our method only cares about recovering state variables. 
+Another advantage of our method comparing to RCC is that we can handle arbitrary control flows but RCC can only handle structured programs. 
+This is because RCC relies on proper shapes of the original program to build the reverse program.
 
-Akgul and Mooney introduced a more sophisticated incremental inversion algorithm that uses def-use analysis to invert some assignment statements that are not lossless \cite{Akgul2004a}; we refer to this approach as regenerative incremental inversion.
-In order to reverse a lossy assignment to the variable $a$, such as $a \leftarrow 0$, the regenerative algorithm looks for ways to recompute the previous value of $a$. 
-One technique to obtain the previous value of $a$ is to re-execute its definition; another technique is to examine all the uses of $a$ and see if its value can be retrieved from any of its uses. 
+
+
+\paragraph{Value graph based approach} Akgul and Mooney introduced a more sophisticated incremental inversion algorithm that uses def-use analysis to invert some assignment statements that are not lossless \cite{Akgul2004a}; we refer to this approach as regenerative incremental inversion.
+In order to reverse a lossy assignment to the variable \texttt{a}, such as \texttt{a = 0}, the regenerative algorithm looks for ways to recompute the previous value of \texttt{a}. 
+One technique to obtain the previous value of \texttt{a} is to re-execute its definition. For example, assume before \texttt{a} is modified, its previous definition is \texttt{a = b + c}, then we could retrieved its old value by redefining it using the same expression: \texttt{a = b + c}. 
+Note that in OPDES, the variables we want to retrieve are normally the input of the program, which don't have ``previous'' definitions. 
+Therefore, this technique only works on those local variables which are used to retrieved state variables.
+Another technique is to examine all the uses of \texttt{a} and see if its value can be retrieved from any of its uses. 
+For example, if \texttt{a} is used to defined another variable \texttt{b} by \texttt{b = a + c}, then we could retrieve \texttt{a} from \texttt{a = b - c}.
+Note that this technique only works for some special operations like plus and minus.
 These two techniques are applied recursively whenever a modifying operation is to be reversed; if they fail to produce a result, the overwritten variable is saved during forward execution.
 Specifically, they build a graph called modified value graph (MVG), from which they perform a simple search for a desired value.
+The control flows are handled based on the phi functions in SSA form \cite{Cytron1991}, but they cannot handle loops properly.
 Our approach is inspired from their method but takes advantage of all the def-use relationships utilized by regenerative inversion, without suffering from the drawbacks of incremental inversion. 
 In addition to def-use information, our approach  also derives equality relationships between variables from the outcome of branching statements that test for equality or inequality.
+Further more, our method can take care of arbitrary control flows, including loops.
+
 
 A related line of work is inverting programs that are injective, without using any state saving.
 Most such work focuses on inverting functional programs \cite{Abramov2002a,Gluck2005,Kawabe2005}.
-Approaches to inverting imperative programs include translation to a logic language \cite{Ross1997} 
+Approaches to inverting imperative programs include translation to a logic language \cite{Ross1997}.
 
 
-The PINS framework for program inversion \cite{Srivastava2011} is a template-based program synthesis framework.
+\paragraph{Template based program synthesis framework} The PINS framework for program inversion \cite{Srivastava2011} is a template-based program synthesis framework.
 Rather than compiler transformations, PINS uses sketching and synthesis.
 In PINS, a programmer defines a template of the inverse with holes that a synthesizer attempts to fill in from a pool of candidates, using the underlying machinery of satisfiability (SMT) solvers.
 However, the current incarnation of PINS has weaknesses relative to our work.
@@ -269,11 +291,14 @@ This thesis has mainly three contributions:
 Most previous research on program inversion focuses on generating  inverses from injective programs, but we can also handle non-injective programs by generating an injective version of it through storing necessary informations, which expands the scope of program inversion.
 By introducing a cost model to our method, we try to minimize the amount of informations to be stored in the forward program. 
 
-\item We developed a novel method to handle programs with arrays, with the help of  array subregions and a modified version of Array SSA.
+\item We developed a novel method to handle programs with arrays, with the help of  array subregions and a modified version of Array SSA \cite{rus2006scalable}.
 And the method we developed could also be used to handle object accesses by transforming them into array accesses.
 
 
-\item  Our compiler Backstroke can also be able to utilize  high level informations to generate better results, which in practice works quite well.
+\item  Our compiler can make use of human knowledge and generate better results. We feed those high level informations to our compiler and in practice the generated result are improved. 
+We believe that based on this concept we could develop a framework or even a new language for program inversion for better results.
+ 
+
 
 \end{itemize}
 
@@ -1191,44 +1216,54 @@ The Table~\ref{table:stl} shows how we generate the forward and reverse code for
 
 \chapter{Conclusion and future work}
 
+In this thesis we presented a compiler framework Backstroke that generates forward and reverse programs for a given program automatically. 
+Two novel intermediate representations are critical in Backstroke: a VSG shows equalities between values in the program, and each equality is constrained by a set of control flow paths; a RG is the search result of the VSG which shows all data dependences in the reverse program and the forward and reverse programs are generated from the RG.
+
+After the VSG is built and all target and available nodes are located, we start a search from target nodes until available nodes are reached. A special state saving node is added to the VSG such that any value could be retrieved at least using the state saving method, though normally it is more expensive than other methods. 
+The search algorithm tries to get the search result with the least cost - that is, minimize the usage of state savings.
+It also guarantees each target value is retrieved on all control flow paths in the program. 
+To deal with arrays, we introduce special array nodes into the VSG and show equalities between subregions of arrays. 
+An array subregion is a subset of array elements, and during the search for a specific subregion, we perform set operations on subregions to make sure the target subregion of the array is retrieved. 
+To retrieve an array subregion from a loop, we developed a demand-driven algorithm that retrieves one array element from each iteration of the loop.
+
+To handle loops, we first transform the loop into a single-entry single-exit loop like a while loop or do-while loop.
+Given a while loop, the key idea behind retrieving an input value of the loop from its outputs is to retrieve the corresponding input value in each iteration. 
+We need to augment the VSG with additional edges that connect the loop's input and output values to the input and output values of the body.
+We may then run the search procedure, which yields an RG with cycles.
+The presence of cycles indicates that we need to build loops in the reverse program.
+To construct such a loop in the reverse program, we also build a correct loop condition that guarantees the loop in the reverse program has the same number of iterations at runtime as the loop in the original program.
+
+
+
+
+
+
+
+The Backstroke compiler is implemented based on the open-source ROSE compiler \cite{quinlan2000rose} for C++ programming language. 
+Specifically, Backstroke is a subproject of ROSE and it can be downloaded from http://www.rosecompiler.org (Backstroke is located at ROSE/projects/backstroke).
 
 \paragraph{Future work}
+We think there are two directions to the future work: the first one includes eliminating restrictions in our method; the second one is building a framework for program inversion cooperating with our compiler.
 
-There are two directions to the future work. 
-The first one is expanding the scope of the target language by eliminating restrictions in our method.
+We could expand the scope of the target language by eliminating restrictions in our method.
 One main limitation is that we cannot handle programs with aliasing.
 Since our method heavily depends on SSA, we may need an SSA representation to resolve aliases in the program \cite{cytron1993efficient}.
+In addition, we could also try to handle linked data structures. 
+We have seen previously that the method to handle arrays can be applied to linked data structures, but more informations are required from more sophisticated analyses.
+For example, from shape analysis, we may detect a pattern of linked list traversal, and then we know each list node is traversed only once - an important information that is very useful.
+Another limitation of our method is that we lack of ability to solve equations to retrieve some values. 
+For example, assume we have $a = x + y$ and $ b = x - y$, then by solving equations we could get $x$ and $y$ from $a$ and $b$ through $x = (a + b) / 2$ and $y = (a - b) / 2$.
+How to combine this capability to our VSG is a potential problem to be solved.
+
+In Chapter \ref{chapter:cpp}, we have seen that some high level informations are helpful for Backstroke to generate better result.
+Also, we have also seen that to properly perform state savings on C++ objects, we need three new interfaces for us to do the clone, copy and destroy. 
+This suggests a framework for program inversion, in which some constructs are provided to implement some necessary functions, or give the compiler some hints to generate better result (think about how we handle C++ STL containers). 
+From another aspect, this new framework provides new language features that could be recognized by Backstroke.
+We believe that this new framework (or new language) together with Backstroke can produce much better results for program inversion.
 
 
-We have implemented our algorithm as part of a compiler framework named Backstroke, a C++ source-to-source translator based on ROSE compiler. Experimental results show that our method is effective and produces better performance than previously proposed methods.
 
 
-
-We consider the problem of synthesizing \emph{program inverses}.
-That is, given a program \Program with input state \Input and output state \Output, its \emph{inverse} or \emph{reverse program}, \Inverse, produces \Input given \Output.
-Our primary motivation comes from optimistic parallel discrete event simulation (OPDES).
-There, a simulator must process events while respecting logical temporal event-ordering constraints;
-to extract parallelism, an OPDES simulator may speculatively execute events and only \emph{rollback} execution when event-ordering violations occur~\cite{Jefferson1985}.
-In this context, the ability to perform rollback by running time- and space-efficient \Program and \Inverse, rather than saving and restoring large amounts of state, can make OPDES more practical.
-%
-Synthesizing inverses also appears in numerous other software engineering contexts, such as debugging~\cite{Biswas1999}, synthesizing ``undo'' code, or even generating decompressors automatically given only lossless compression code~\cite{Srivastava2011}.
-The challenge in any of these contexts is that constructing program inverses manually is a tedious, time-consuming, and error-prone task.
-
-%Running the original \Program followed immediately by \Inverse is equivalent to a no-op.
-The program \Program will generally contain non-invertible statements, such as a destructive assignment.
-However, in these cases it may still be possible to create an inverse.
-In particular, we may create an instrumented version of \Program, called the \emph{forward program}, \Forward, with semantics-preserving changes so that it becomes possible to construct \Inverse from \Forward.
-We then replace executions of \Program with \Forward.
-For instance, suppose \Program overwrites a variable \Var.
-We may construct \Forward so that it saves the value of \Var prior to overwriting it.
-Then, \Inverse need only restore the saved value to recover \Var's prior value.
-In this case, \Forward produces extra outputs, which we denote by \ExtraOuts.
-Indeed, even if \Program is theoretically reversible without requiring extra output, we may nevertheless need to generate \ExtraOuts due to fundamental technical limits on program analysis.
-
-In this thesis, we will introduce our system that generates \Forward and \Inverse for a given \Program. 
-Specifically, we categorize \Program into four types: \Program with only scalars and without loops; \Program with only scalars and with loops; \Program with arrays and without loops; \Program with arrays and with loops.
-We will first introduce how we handle the first three cases using a bunch of compilation techniques.
-Handing programs with arrays in loops is exactly the proposed work, being introduced in the last chapter.
 
 
 \bibliography{biblib2,more2,library2,biblib,more,library}
